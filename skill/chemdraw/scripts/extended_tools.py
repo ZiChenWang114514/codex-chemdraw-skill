@@ -16,6 +16,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 import artifact_safety
+from runtime_diagnostics import diagnose_runtime
 
 
 _CLEANUP_APPROACHES = {
@@ -165,6 +166,21 @@ def _validate_chemdraw_ole_bytes(data: bytes, label: str) -> None:
         raise
     except Exception as exc:
         raise ValueError(f"ChemDraw OLE compound file cannot be parsed: {label}: {exc}") from exc
+
+
+def _build_chemdraw_ole(cdx_data: bytes) -> bytes:
+    """Build a valid CFB object despite the upstream mini-stream limitation."""
+    payload = bytes(cdx_data)
+    if not payload.startswith(b"VjCD"):
+        raise ValueError("ChemDraw CDX data has an invalid header")
+    from cdxml_toolkit.office.ole_embedder import build_ole_compound_file
+
+    # cdxml-toolkit 0.5.17 does not populate the CFB mini stream. Padding CDX
+    # to the regular-stream cutoff preserves the CDX prefix and trailing data.
+    padded = payload.ljust(4096, b"\0")
+    ole_data = build_ole_compound_file(padded)
+    _validate_chemdraw_ole_bytes(ole_data, "generated ChemDraw OLE")
+    return ole_data
 
 
 def _relationship_target(relationship_part: str, target: str) -> str:
@@ -740,7 +756,7 @@ def batch_embed_cdxml_in_office(
         raise ValueError(f"Refusing to overwrite an existing file: {destination}")
     destination.parent.mkdir(parents=True, exist_ok=True)
     from cdxml_toolkit.office.ole_embedder import (
-        batch_convert, build_docx, build_ole_compound_file, build_pptx,
+        batch_convert, build_docx, build_pptx,
         get_cdxml_content_size,
     )
 
@@ -762,9 +778,8 @@ def batch_embed_cdxml_in_office(
             raise RuntimeError(
                 f"ChemDraw conversion {index} returned invalid content dimensions"
             )
-        ole_data = build_ole_compound_file(bytes(cdx_data))
         try:
-            _validate_chemdraw_ole_bytes(ole_data, f"conversion {index}")
+            ole_data = _build_chemdraw_ole(bytes(cdx_data))
         except ValueError as exc:
             raise RuntimeError(str(exc)) from exc
         items.append({
@@ -1065,6 +1080,6 @@ PUBLIC_TOOLS = {
         clean_scheme_layout, merge_reaction_schemes, polish_reaction_scheme,
         render_cdxml_files, fill_office_template, batch_embed_cdxml_in_office,
         discover_experiment_files, analyze_lcms_series, assemble_lab_book,
-        parse_scifinder_rdf, segment_large_scheme,
+        parse_scifinder_rdf, segment_large_scheme, diagnose_runtime,
     )
 }

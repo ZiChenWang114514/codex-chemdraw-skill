@@ -11,6 +11,20 @@ $ErrorActionPreference = 'Stop'
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $discoveryScript = Join-Path $scriptRoot 'runtime_discovery.py'
 
+function Get-Sha256Hex {
+    param([Parameter(Mandatory)][string]$LiteralPath)
+
+    $stream = [IO.File]::OpenRead([IO.Path]::GetFullPath($LiteralPath))
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = $sha.ComputeHash($stream)
+        return ([BitConverter]::ToString($bytes)).Replace('-', '')
+    } finally {
+        $sha.Dispose()
+        $stream.Dispose()
+    }
+}
+
 function Get-DiscoveryBootstrap {
     $launcher = Get-Command py.exe -ErrorAction SilentlyContinue
     if ($launcher) {
@@ -61,7 +75,7 @@ function Get-ConfigFingerprint {
     if (-not (Test-Path -LiteralPath $ResolvedConfigPath -PathType Leaf)) {
         return '<absent>'
     }
-    return (Get-FileHash -Algorithm SHA256 -LiteralPath $ResolvedConfigPath).Hash
+    return Get-Sha256Hex -LiteralPath $ResolvedConfigPath
 }
 
 function Test-SamePath {

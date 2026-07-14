@@ -543,3 +543,7 @@ Parse SciFinder RDF and optionally enrich CAS data over the network.
 ### `segment_large_scheme(cdxml_path: str, output_path: Optional[str] = None, verbose: bool = False) -> 'dict[str, Any]'`
 
 Segment a disconnected or multi-panel CDXML scheme into logical regions.
+
+### `diagnose_runtime(run_native_probe: bool = False, run_office_probe: bool = False) -> 'dict[str, Any]'`
+
+Report local runtime capabilities; native probes are explicit and temporary.

@@ -317,6 +317,23 @@ class PowerShellHarness:
                     output = Path(args[args.index("--output") + 1])
                     output.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(source / "mcp-signatures.md", output)
+                elif args and args[0].endswith("runtime_diagnostics.py"):
+                    capabilities = {
+                        "python": {"status": "available"},
+                        "cdxml_toolkit": {"status": "available", "version": "0.5.17"},
+                        "tool_registry": {"status": "available", "count": 28},
+                        "decimer_models": {"status": "missing"},
+                    }
+                    if "--native-probe" in args:
+                        capabilities["native_probe"] = {"status": "available"}
+                    if "--office-probe" in args:
+                        capabilities["office_probe"] = {"status": "available"}
+                    print(json.dumps({
+                        "ok": True,
+                        "outputs": {"capabilities": capabilities},
+                        "warnings": ["decimer_models: capability is unavailable"],
+                        "metadata": {"tool_count": 28, "network_used": False},
+                    }))
                 raise SystemExit(0)
                 """
             ).lstrip(),
@@ -519,6 +536,11 @@ def _run_powershell(
 
 
 class ConfigureMcpTests(unittest.TestCase):
+    def test_config_hash_does_not_depend_on_get_file_hash_cmdlet(self):
+        source = CONFIGURE_SCRIPT.read_text(encoding="utf-8")
+        self.assertNotIn("Get-FileHash", source)
+        self.assertIn("Security.Cryptography.SHA256", source)
+
     def _arguments(self, harness: PowerShellHarness) -> list[str]:
         return [
             "-Python",
@@ -861,20 +883,24 @@ class HealthCheckTests(unittest.TestCase):
     def test_health_uses_runtime_discovery_and_bounded_process_helper(self):
         source = HEALTH_SCRIPT.read_text(encoding="utf-8")
         self.assertIn("runtime_discovery.py", source)
+        self.assertIn("runtime_diagnostics.py", source)
         self.assertIn("Invoke-BoundedNative", source)
         self.assertNotIn("$env:CHEMDRAW_MCP_PYTHON", source)
         self.assertNotIn("$env:CONDA_PREFIX", source)
         self.assertNotIn("& $Python", source)
+        self.assertNotIn("Get-FileHash", source)
+        self.assertIn("Security.Cryptography.SHA256", source)
 
     def test_health_generates_and_compares_mcp_signatures(self):
         source = HEALTH_SCRIPT.read_text(encoding="utf-8")
         self.assertIn("generate_tool_reference.py", source)
         self.assertIn("mcp-signatures.md", source)
 
-    def test_health_retains_decimer_as_warning(self):
+    def test_health_uses_diagnostic_warnings_and_not_registry_only_success(self):
         source = HEALTH_SCRIPT.read_text(encoding="utf-8")
         self.assertIn("Write-Warning", source)
-        self.assertIn("DECIMER models are not installed", source)
+        self.assertNotIn("ChemDraw COM: registered (read-only check)", source)
+        self.assertNotIn("$comKey", source)
 
     def test_skip_native_chemdraw_warns_and_omits_chemscript_ping(self):
         source = HEALTH_SCRIPT.read_text(encoding="utf-8")
@@ -893,7 +919,7 @@ class HealthCheckTests(unittest.TestCase):
             self.assertIn("Native ChemDraw checks skipped", combined)
             self.assertFalse(
                 any(
-                    "cdxml_toolkit.chemdraw.chemscript_bridge" in argument
+                    argument in {"--native-probe", "--office-probe"}
                     for call in harness.runtime_calls()
                     for argument in call
                 )

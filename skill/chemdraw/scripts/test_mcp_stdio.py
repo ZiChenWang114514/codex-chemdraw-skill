@@ -40,11 +40,12 @@ class MCPStdioTests(unittest.TestCase):
     def test_server_initializes_and_lists_expected_schemas(self):
         tools = asyncio.run(asyncio.wait_for(_list_tools(), timeout=30))
         by_name = {tool.name: tool for tool in tools}
-        self.assertEqual(len(by_name), 27)
+        self.assertEqual(len(by_name), 28)
         self.assertIn("resolve_name", by_name)
         self.assertIn("embed_cdxml_in_office", by_name)
         self.assertIn("extract_structures_via_decimer_api", by_name)
         self.assertIn("clean_scheme_layout", by_name)
+        self.assertIn("diagnose_runtime", by_name)
 
         self.assertEqual(
             set(by_name["resolve_name"].inputSchema.get("required", [])),

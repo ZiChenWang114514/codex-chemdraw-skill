@@ -47,4 +47,4 @@ Load one section matching the user's intent. Exact signatures live only in [mcp-
 
 ## Diagnose Runtime
 
-Read [operations.md](operations.md). Run the health check first; do not alter Codex configuration until discovery output is understood.
+Read [operations.md](operations.md). Start with `diagnose_runtime()` and load only the native probes needed for the failing capability. Run the full health check before changing Codex configuration.

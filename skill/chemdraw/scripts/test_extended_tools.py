@@ -739,6 +739,21 @@ class ExtendedToolContractTests(unittest.TestCase):
                 marker_only_chemdraw_ole(), "marker-only.bin"
             )
 
+    def test_short_cdx_is_padded_to_a_valid_compound_file_contents_stream(self):
+        import io
+        import olefile
+
+        cdx = b"VjCD0100" + (b"\0" * 120)
+        ole_data = extended_tools._build_chemdraw_ole(cdx)
+        extended_tools._validate_chemdraw_ole_bytes(ole_data, "short-cdx")
+        compound = olefile.OleFileIO(io.BytesIO(ole_data))
+        try:
+            contents = compound.openstream("CONTENTS").read()
+        finally:
+            compound.close()
+        self.assertGreaterEqual(len(contents), 4096)
+        self.assertTrue(contents.startswith(cdx))
+
     def test_fill_accepts_valid_package_with_requested_chemdraw_ole(self):
         template = self.root / "template.pptx"
         manifest = self.root / "manifest.json"
@@ -849,7 +864,7 @@ class ExtendedToolContractTests(unittest.TestCase):
             {
                 "path": str(self.source.resolve()),
                 "name": "scheme",
-                "cdx_data": b"cdx",
+                "cdx_data": b"VjCD0100" + (b"\0" * 120),
                 "emf_data": b"",
             }
         ]
@@ -868,7 +883,7 @@ class ExtendedToolContractTests(unittest.TestCase):
             {
                 "path": str(self.source.resolve()),
                 "name": "scheme",
-                "cdx_data": b"cdx",
+                "cdx_data": b"VjCD0100" + (b"\0" * 120),
                 "emf_data": b"emf",
             }
         ]
@@ -887,7 +902,7 @@ class ExtendedToolContractTests(unittest.TestCase):
             {
                 "path": str(self.source.resolve()),
                 "name": "scheme",
-                "cdx_data": b"cdx",
+                "cdx_data": b"VjCD0100" + (b"\0" * 120),
                 "emf_data": b"emf",
             }
         ]
@@ -912,7 +927,7 @@ class ExtendedToolContractTests(unittest.TestCase):
             {
                 "path": str(self.source.resolve()),
                 "name": "scheme",
-                "cdx_data": b"cdx",
+                "cdx_data": b"VjCD0100" + (b"\0" * 120),
                 "emf_data": b"emf",
             }
         ]

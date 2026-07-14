@@ -37,6 +37,7 @@ CHEMDRAW_COM_TOOLS = {
     "render_cdxml_files",
     "fill_office_template",
     "batch_embed_cdxml_in_office",
+    "diagnose_runtime",
 }
 
 

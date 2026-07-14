@@ -269,12 +269,12 @@ class WorkerRuntimeTests(unittest.TestCase):
             cdxml.write_text("<CDXML><page/></CDXML>", encoding="utf-8")
             office = root / "report.pptx"
 
-            def fake_embed(_cdxml_path, _office_path, output_path):
+            def fake_embed(_cdxml_path, output_path):
                 write_valid_office(output_path)
-                return {"ok": True, "output": output_path, "num_objects_embedded": 1}
+                return {"ok": True, "output": str(output_path), "num_objects_embedded": 1}
 
             with mock.patch(
-                "cdxml_toolkit.mcp_server.server.embed_cdxml_in_office",
+                "official_overrides._build_embedded_office",
                 side_effect=fake_embed,
             ):
                 result = official_overrides.embed_cdxml_in_office(str(cdxml), str(office))

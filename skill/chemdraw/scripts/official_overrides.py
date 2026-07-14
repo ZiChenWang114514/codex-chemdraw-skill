@@ -284,16 +284,54 @@ def extract_cdxml_from_office(
         }
 
 
+def _build_embedded_office(source: Path, destination: Path) -> dict[str, Any]:
+    from cdxml_toolkit.office.ole_embedder import (
+        batch_convert,
+        build_docx,
+        build_pptx,
+        get_cdxml_content_size,
+    )
+    from extended_tools import _build_chemdraw_ole
+
+    converted = batch_convert([str(source)])
+    if len(converted) != 1 or not isinstance(converted[0], dict):
+        return {"ok": False, "error": "ChemDraw COM conversion returned no output"}
+    item = converted[0]
+    cdx_data = item.get("cdx_data")
+    emf_data = item.get("emf_data")
+    if not isinstance(cdx_data, (bytes, bytearray, memoryview)) or not cdx_data:
+        return {"ok": False, "error": "ChemDraw COM conversion returned empty CDX"}
+    if not isinstance(emf_data, (bytes, bytearray, memoryview)) or not emf_data:
+        return {"ok": False, "error": "ChemDraw COM conversion returned empty EMF"}
+    width, height = get_cdxml_content_size(str(source))
+    items = [
+        {
+            "ole_data": _build_chemdraw_ole(bytes(cdx_data)),
+            "emf_data": bytes(emf_data),
+            "width_emu": width,
+            "height_emu": height,
+            "name": item.get("name") or source.stem,
+        }
+    ]
+    if destination.suffix.lower() == ".pptx":
+        build_pptx(items, str(destination))
+    else:
+        build_docx(items, str(destination))
+    return {
+        "ok": True,
+        "input_cdxml": str(source),
+        "output": str(destination),
+        "format": destination.suffix.lstrip("."),
+        "num_objects_embedded": 1,
+    }
+
+
 def embed_cdxml_in_office(
     cdxml_path: str,
     office_path: str,
     output_path: str | None = None,
 ) -> dict:
     """Create a new validated PPTX or DOCX and reject all existing targets."""
-    from cdxml_toolkit.mcp_server.server import embed_cdxml_in_office as upstream
-
-    upstream = _raw_upstream(upstream)
-
     source = artifact_safety.validate_input_file(cdxml_path, suffixes=(".cdxml",))
     office = Path(office_path).expanduser().resolve()
     if office.suffix.lower() not in {".pptx", ".docx"}:
@@ -322,7 +360,7 @@ def embed_cdxml_in_office(
     try:
         result = _run_file_tool(
             destination,
-            lambda staged: upstream(str(source), str(office), str(staged)),
+            lambda staged: _build_embedded_office(source, staged),
             validator=validate,
         )
         if isinstance(result, dict) and result.get("ok"):

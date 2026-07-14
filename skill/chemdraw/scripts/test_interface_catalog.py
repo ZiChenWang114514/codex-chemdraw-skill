@@ -38,7 +38,7 @@ class InterfaceCatalogTests(unittest.TestCase):
                 (REFERENCES / "mcp-signatures.md").read_text(encoding="utf-8")
             )
         )
-        self.assertGreaterEqual(len(live_tools), 27)
+        self.assertGreaterEqual(len(live_tools), 28)
         self.assertEqual(live_tools, documented)
 
     def test_generated_mcp_signatures_are_current(self):

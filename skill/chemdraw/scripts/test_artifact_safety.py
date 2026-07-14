@@ -34,7 +34,7 @@ class ArtifactSafetyTests(unittest.TestCase):
             suffix=".png",
         )
 
-        self.assertEqual(destination, self.root / "scheme_rendered_2.png")
+        self.assertEqual(destination, (self.root / "scheme_rendered_2.png").resolve())
 
     def test_default_destination_without_source_does_not_duplicate_tag(self):
         destination = artifact_safety.resolve_destination(
@@ -45,7 +45,7 @@ class ArtifactSafetyTests(unittest.TestCase):
             base_dir=self.root,
         )
 
-        self.assertEqual(destination, self.root / "result.json")
+        self.assertEqual(destination, (self.root / "result.json").resolve())
 
     def test_explicit_destination_rejects_existing_sentinel(self):
         destination = self.root / "result.json"

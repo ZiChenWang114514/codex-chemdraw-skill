@@ -23,13 +23,15 @@ Run `scripts/runtime_discovery.py` from Python when debugging discovery code. Ge
 
 ## Health And Smoke Tests
 
-Run `scripts/health_check.ps1` first. It checks Python packages, ChemScript, ChemDraw COM, generated signatures and inventory, Skill tests, and Codex MCP state. Native checks are time-bounded.
+Run MCP `diagnose_runtime()` for an offline, read-only capability matrix. It reports the Python runtime, installed `cdxml-toolkit` distribution version, ChemDraw discovery and COM registration, ChemScript, Java/OPSIN, Office dependencies, DECIMER markers, and live tool count without importing DECIMER or downloading weights. Set `run_native_probe=true` for a temporary CDXML-to-PNG and ChemScript probe; set `run_office_probe=true` for temporary PPTX/DOCX ChemDraw OLE probes.
+
+Run `scripts/health_check.ps1` for the complete repository gate. It consumes the same diagnostic matrix, checks Python packages, generated signatures and inventory, Skill tests, Codex MCP state, and, unless skipped, the native and Office probes. Every subprocess is time-bounded.
 
 Run `scripts/smoke_test.py --output-dir <directory>` for name resolution, editable aspirin CDXML, native ChemDraw PNG rendering, and raster validation.
 
 ## DECIMER
 
-Local image recognition requires official DECIMER weights. Install with `scripts/install_decimer_models.py` when Zenodo is reachable. Missing local weights are a warning and do not block other tools.
+Local image recognition requires official DECIMER weights. Install both with `scripts/install_decimer_models.py`, or select one with `--model standard` / `--model handdrawn`. Each model is downloaded and extracted in isolation, verified against the MD5 published with the [standard model](https://zenodo.org/records/8300489) or [hand-drawn model](https://zenodo.org/records/10781330), assigned a computed SHA-256 receipt, and atomically installed only after its complete marker exists. Missing local weights are a warning and do not block other tools.
 
 Remote recognition uses the configured `DECIMER_API_URL` or the Steinbeck Lab default. It enforces image decoding, request/response size limits, timeout, and explicit `confirm_upload=true`. Relevant limits:
 

@@ -116,6 +116,15 @@ class DistributionTests(unittest.TestCase):
                     missing.append(f"{path.relative_to(ROOT).as_posix()} -> {raw_target}")
         self.assertEqual(missing, [], "Broken local Markdown links:\n" + "\n".join(missing))
 
+    def test_ci_has_pinned_full_portable_skill_validation(self) -> None:
+        workflow = (ROOT / ".github" / "workflows" / "validate.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("full-portable-tests:", workflow)
+        self.assertIn('python-version: "3.12"', workflow)
+        self.assertIn('cdxml-toolkit==0.5.17', workflow)
+        self.assertIn('unittest discover -s skill/chemdraw/scripts', workflow)
+
 
 if __name__ == "__main__":
     unittest.main()

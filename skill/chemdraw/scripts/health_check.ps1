@@ -11,9 +11,24 @@ param(
 $ErrorActionPreference = 'Stop'
 $failures = [System.Collections.Generic.List[string]]::new()
 $discoveryScript = Join-Path $PSScriptRoot 'runtime_discovery.py'
+$diagnosticsScript = Join-Path $PSScriptRoot 'runtime_diagnostics.py'
 
 if ($SkipNativeChemDraw) {
-    Write-Warning 'Native ChemDraw checks skipped by -SkipNativeChemDraw: ChemScript bridge ping will not run; COM registration remains a read-only registry check'
+    Write-Warning 'Native ChemDraw checks skipped by -SkipNativeChemDraw: native PNG and Office OLE probes will not run'
+}
+
+function Get-Sha256Hex {
+    param([Parameter(Mandatory)][string]$LiteralPath)
+
+    $stream = [IO.File]::OpenRead([IO.Path]::GetFullPath($LiteralPath))
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = $sha.ComputeHash($stream)
+        return ([BitConverter]::ToString($bytes)).Replace('-', '')
+    } finally {
+        $sha.Dispose()
+        $stream.Dispose()
+    }
 }
 
 function ConvertTo-NativeArgument {
@@ -221,8 +236,8 @@ function Compare-ManagedInventoryFiles {
             $failures.Add("Toolkit public interface inventory is missing managed file: $relative")
             continue
         }
-        $expectedHash = (Get-FileHash -LiteralPath $expected[$relative]).Hash
-        $generatedHash = (Get-FileHash -LiteralPath $generated[$relative]).Hash
+        $expectedHash = Get-Sha256Hex -LiteralPath $expected[$relative]
+        $generatedHash = Get-Sha256Hex -LiteralPath $generated[$relative]
         if ($expectedHash -ne $generatedHash) {
             $failures.Add("Toolkit public interface inventory is stale: $relative")
         }
@@ -261,15 +276,34 @@ if ($discovery) {
             Description = 'pip dependency check'
         }
     )
-    if (-not $SkipNativeChemDraw) {
-        $commands += [pscustomobject]@{
-            Arguments = @('-m', 'cdxml_toolkit.chemdraw.chemscript_bridge', 'ping')
-            Description = 'ChemScript bridge ping'
-        }
-    }
     foreach ($command in $commands) {
         $result = Invoke-BoundedNative -FilePath $pythonPath -Arguments $command.Arguments
         Add-CommandFailure $result $command.Description
+    }
+
+    $diagnosticArguments = @($diagnosticsScript, '--json')
+    if (-not $SkipNativeChemDraw) {
+        $diagnosticArguments += @('--native-probe', '--office-probe')
+    }
+    $diagnosticResult = Invoke-BoundedNative `
+        -FilePath $pythonPath `
+        -Arguments $diagnosticArguments
+    Add-CommandFailure $diagnosticResult 'Runtime capability diagnostics'
+    if ($diagnosticResult.StdOut.Trim()) {
+        try {
+            $diagnostics = $diagnosticResult.StdOut | ConvertFrom-Json
+            foreach ($property in $diagnostics.outputs.capabilities.PSObject.Properties) {
+                Write-Output ("Capability {0}: {1}" -f $property.Name, $property.Value.status)
+            }
+            foreach ($warning in @($diagnostics.warnings)) {
+                if ($warning) { Write-Warning ([string]$warning) }
+            }
+            if (-not $diagnostics.ok -and $diagnosticResult.ExitCode -eq 0) {
+                $failures.Add('Runtime capability diagnostics reported required capabilities unavailable')
+            }
+        } catch {
+            $failures.Add("Runtime capability diagnostics returned invalid JSON: $($_.Exception.Message)")
+        }
     }
 
     $pythonFiles = @(
@@ -330,8 +364,8 @@ if ($discovery) {
                 if (-not (Test-Path -LiteralPath $expectedSignatures -PathType Leaf)) {
                     $failures.Add('Generated MCP signatures are missing: mcp-signatures.md')
                 } elseif (
-                    (Get-FileHash -LiteralPath $expectedSignatures).Hash -ne
-                    (Get-FileHash -LiteralPath $generatedSignatures).Hash
+                    (Get-Sha256Hex -LiteralPath $expectedSignatures) -ne
+                    (Get-Sha256Hex -LiteralPath $generatedSignatures)
                 ) {
                     $failures.Add('Generated MCP signatures are stale: mcp-signatures.md')
                 }
@@ -340,26 +374,6 @@ if ($discovery) {
             Remove-Item -LiteralPath $checkRoot -Recurse -Force -ErrorAction SilentlyContinue
         }
     }
-}
-
-$comKey = 'Registry::HKEY_CLASSES_ROOT\ChemDraw.Application\CLSID'
-if (Test-Path -LiteralPath $comKey) {
-    Write-Output 'ChemDraw COM: registered (read-only check)'
-} else {
-    $failures.Add('ChemDraw.Application COM registration not found')
-}
-
-$decimerRoot = Join-Path $HOME '.data\DECIMER-V2'
-$decimerMarkers = @(
-    (Join-Path $decimerRoot 'DECIMER_model\saved_model.pb'),
-    (Join-Path $decimerRoot 'DECIMER_HandDrawn_model\saved_model.pb')
-)
-if (($decimerMarkers | Where-Object {
-    -not (Test-Path -LiteralPath $_ -PathType Leaf)
-}).Count -eq 0) {
-    Write-Output 'DECIMER models: installed'
-} else {
-    Write-Warning 'DECIMER models are not installed; run scripts\install_decimer_models.py when Zenodo is reachable'
 }
 
 $codex = Invoke-BoundedNative `

@@ -51,7 +51,7 @@ No username, Conda root, ChemDraw directory, or Office directory should be hard-
 
 ### Activation and Bitness
 
-An activated ChemDraw desktop application does not guarantee that every automation interface is available. The health check separately tests executable discovery, COM registration, native rendering, and optional ChemScript paths.
+An activated ChemDraw desktop application does not guarantee that every automation interface is available. `diagnose_runtime()` reports separate capability states; the full health check adds temporary native PNG, ChemScript, and PPTX/DOCX OLE probes.
 
 If a native workflow fails, confirm that Python and the required native component use compatible architectures, then run:
 

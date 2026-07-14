@@ -28,3 +28,23 @@ jobs:
       - name: Validate installer dry run
         shell: pwsh
         run: ./scripts/install.ps1
+
+  full-portable-tests:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install pinned toolkit runtime
+        run: python -m pip install "cdxml-toolkit==0.5.17"
+
+      - name: Run complete portable Skill tests
+        run: python -m unittest discover -s skill/chemdraw/scripts -p "test_*.py"
