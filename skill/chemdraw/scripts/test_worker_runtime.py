@@ -212,6 +212,27 @@ class WorkerRuntimeTests(unittest.TestCase):
             "official_overrides",
         )
         self.assertIn("reject", specs["embed_cdxml_in_office"].description.lower())
+        self.assertIn("standalone CDXML", specs["draw_molecule"].description)
+        self.assertIn("no-overwrite", specs["draw_molecule"].description)
+        self.assertEqual(
+            {
+                name
+                for name, spec in specs.items()
+                if spec.group == "official" and spec.function.__module__ == "official_overrides"
+            },
+            {
+                "draw_molecule",
+                "render_scheme",
+                "parse_reaction",
+                "parse_scheme",
+                "convert_cdx_cdxml",
+                "parse_analysis_file",
+                "format_lab_entry",
+                "extract_cdxml_from_office",
+                "embed_cdxml_in_office",
+                "render_to_png",
+            },
+        )
         with self.assertRaisesRegex(RuntimeError, "collision"):
             tool_registry._merge_named_tools(
                 {"same": object()}, {"same": object()}, source="test"

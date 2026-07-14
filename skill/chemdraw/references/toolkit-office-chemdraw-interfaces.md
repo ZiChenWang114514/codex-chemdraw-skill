@@ -8,7 +8,7 @@ Load for CDX/CDXML conversion, native rendering, ChemScript operations, editable
 
 - Convert one file: MCP `convert_cdx_cdxml`.
 - Native render: MCP `render_to_png` or `render_cdxml_files`.
-- Extract editable Office objects: MCP `extract_cdxml_from_office`.
+- Extract editable Office objects: MCP `extract_cdxml_from_office`. Extraction validates every object in a staging directory and publishes the directory only when all objects succeed.
 - Create a new Office file with one editable object: MCP `embed_cdxml_in_office`; it rejects existing Office targets.
 - Create a PPTX/DOCX collection: MCP `batch_embed_cdxml_in_office`.
 - Fill a template manifest: MCP `fill_office_template`.

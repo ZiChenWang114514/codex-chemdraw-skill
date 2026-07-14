@@ -7,7 +7,7 @@ Exact signatures are generated in [mcp-signatures.md](mcp-signatures.md). This f
 - Prefer official molecule/reaction tools for ordinary drawing and parsing.
 - Prefer extended tools for complete layout, merge, polish, batch render, Office, RDF, and experiment workflows.
 - Use the remote DECIMER tool only after user authorization; `confirm_upload` is an enforced gate.
-- New extended tools return `{ok, outputs, warnings, metadata}`. Existing official tools retain their upstream return format.
+- New extended tools return `{ok, outputs, warnings, metadata}`. Existing official tools retain their upstream fields and add `metadata.artifacts` after a successful write; each artifact records an absolute path, byte count, and SHA-256.
 
 ## Failures
 
@@ -18,7 +18,7 @@ Exact signatures are generated in [mcp-signatures.md](mcp-signatures.md). This f
 - `worker_output_limit`: stdout or stderr exceeded `CHEMDRAW_MCP_WORKER_OUTPUT_BYTES`; inspect the local diagnostic log rather than raising the limit blindly.
 - `worker_protocol_error`: the isolated worker did not return a valid JSON envelope. Treat this as a runtime defect, not a chemistry result.
 - `tool_execution_failed`: a tool raised an input, chemistry, COM, parser, or write error. MCP receives a stable error id; details remain in the user-local worker log.
-- Existing output: modification tools refuse overwrite. The official `embed_cdxml_in_office` name is retained, but its safety override rejects existing Office targets because the upstream builder cannot preserve their content.
+- Existing output: every writing tool refuses explicit overwrite. Default destinations use semantic suffixes and increment on conflict. Outputs are staged, validated, and published without clobbering; multi-file failures roll back the whole result. The official `embed_cdxml_in_office` name is retained, but its safety override rejects existing Office targets because the upstream builder cannot preserve their content.
 - Native render failure: keep the CDXML for diagnosis but do not claim final validation.
 - Multiple OCSR candidates: return all candidates and warnings; do not assume the first item is correct.
 

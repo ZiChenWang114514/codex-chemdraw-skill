@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 from contextlib import redirect_stderr, redirect_stdout
+import copy
 import io
 import json
 import os
 from pathlib import Path, PurePosixPath
 import posixpath
-import shutil
 import struct
 import tempfile
 from typing import Any, Optional
 import xml.etree.ElementTree as ET
 import zipfile
+
+import artifact_safety
 
 
 _CLEANUP_APPROACHES = {
@@ -27,12 +29,18 @@ _CHEMDRAW_CLSID_TEXT = "41BA6D21-A02E-11CE-8FD9-0020AFD1F20C"
 
 
 def _contract(outputs: dict[str, Any], warnings=None, metadata=None) -> dict[str, Any]:
-    return {
+    payload = {
         "ok": True,
         "outputs": outputs,
         "warnings": list(warnings or []),
         "metadata": dict(metadata or {}),
     }
+    artifacts = artifact_safety.artifact_records(
+        artifact_safety.paths_from_value(outputs)
+    )
+    if artifacts:
+        payload["metadata"]["artifacts"] = artifacts
+    return payload
 
 
 def _source(path: str, *, suffixes: tuple[str, ...] | None = None) -> Path:
@@ -62,20 +70,12 @@ def _destination(
     tag: str,
     suffix: str | None = None,
 ) -> Path:
-    if output_path:
-        destination = Path(output_path).expanduser().resolve()
-        if destination == source or destination.exists():
-            raise ValueError(f"Refusing to overwrite an existing file: {destination}")
-    else:
-        destination = source.with_name(f"{source.stem}_{tag}{suffix or source.suffix}")
-        index = 2
-        while destination.exists():
-            destination = source.with_name(
-                f"{source.stem}_{tag}_{index}{suffix or source.suffix}"
-            )
-            index += 1
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    return destination
+    return artifact_safety.resolve_destination(
+        source=source,
+        output_path=output_path,
+        tag=tag,
+        suffix=suffix or source.suffix,
+    )
 
 
 def _local_name(tag: str) -> str:
@@ -322,46 +322,11 @@ def _assert_output(
 
 
 def _publish_without_overwrite(source: Path, destination: Path) -> None:
-    try:
-        os.link(source, destination)
-    except FileExistsError as exc:
-        raise ValueError(f"Refusing to overwrite an existing file: {destination}") from exc
-    except OSError:
-        created_destination = False
-        try:
-            with source.open("rb") as src, destination.open("xb") as dst:
-                created_destination = True
-                shutil.copyfileobj(src, dst)
-        except Exception:
-            if created_destination:
-                destination.unlink(missing_ok=True)
-            raise
-    else:
-        try:
-            source.unlink()
-        except Exception as exc:
-            try:
-                destination.unlink()
-            except Exception as rollback_exc:
-                raise RuntimeError(
-                    f"Failed to roll back staged output {destination}: {rollback_exc}"
-                ) from exc
-            raise
+    artifact_safety.publish_file(source, destination)
 
 
 def _commit_staged_outputs(staged: list[tuple[Path, Path]]) -> None:
-    for _, destination in staged:
-        if destination.exists():
-            raise ValueError(f"Refusing to overwrite an existing file: {destination}")
-    committed = []
-    try:
-        for source, destination in staged:
-            _publish_without_overwrite(source, destination)
-            committed.append(destination)
-    except Exception:
-        for destination in committed:
-            destination.unlink(missing_ok=True)
-        raise
+    artifact_safety.publish_files(staged)
 
 
 def _normalize_warnings(value: Any) -> list[str]:
@@ -852,6 +817,7 @@ def discover_experiment_files(
             temporary.write_text(json.dumps(payload, indent=2), encoding="utf-8")
             _assert_output(temporary)
             _commit_staged_outputs([(temporary, destination)])
+        payload = artifact_safety.with_artifacts(payload, [destination])
     return payload
 
 
@@ -977,6 +943,9 @@ def parse_scifinder_rdf(
     reactions = list(parse_rdf(str(source)))
     if not reactions:
         raise ValueError("SciFinder RDF contained no reactions")
+    before_records = [
+        copy.deepcopy(reaction_to_dict(reaction)) for reaction in reactions
+    ]
     if resolve_cas:
         for reaction in reactions:
             resolve_cas_numbers(reaction)
@@ -994,32 +963,48 @@ def parse_scifinder_rdf(
                 collect_cas(child)
 
     collect_cas(records)
-    resolution_candidates = []
-    for record in records:
-        if not isinstance(record, dict):
-            continue
-        for variation in record.get("variations", []):
-            if not isinstance(variation, dict):
+    def resolution_candidates(values: list[Any]) -> list[dict[str, Any]]:
+        candidates = []
+        for record in values:
+            if not isinstance(record, dict):
                 continue
-            for category in ("reagents", "catalysts", "solvents"):
-                for entry in variation.get(category, []):
-                    if (
-                        isinstance(entry, dict)
-                        and isinstance(entry.get("cas"), str)
-                        and entry["cas"].strip()
-                    ):
-                        resolution_candidates.append(entry)
-    attempted_cas_resolution_count = len(resolution_candidates) if resolve_cas else 0
-    resolved_cas_count = (
-        sum(
-            any(
-                entry.get(key) not in (None, "")
+            for variation in record.get("variations", []):
+                if not isinstance(variation, dict):
+                    continue
+                for category in ("reagents", "catalysts", "solvents"):
+                    for entry in variation.get(category, []):
+                        if (
+                            isinstance(entry, dict)
+                            and isinstance(entry.get("cas"), str)
+                            and entry["cas"].strip()
+                        ):
+                            candidates.append(entry)
+        return candidates
+
+    before_candidates = resolution_candidates(before_records)
+    after_candidates = resolution_candidates(records)
+    cas_resolutions = []
+    if resolve_cas:
+        for index, before in enumerate(before_candidates):
+            after = after_candidates[index] if index < len(after_candidates) else {}
+            fields_added = [
+                key
                 for key in ("name", "mw", "formula", "smiles")
-            )
-            for entry in resolution_candidates
-        )
-        if resolve_cas
-        else 0
+                if before.get(key) in (None, "") and after.get(key) not in (None, "")
+            ]
+            resolution = {
+                "cas": before["cas"].strip(),
+                "status": "resolved" if fields_added else "unresolved",
+                "fields_added": fields_added,
+            }
+            if fields_added and after.get("source"):
+                resolution["source"] = after["source"]
+            cas_resolutions.append(resolution)
+
+    resolution_candidates_after = after_candidates
+    attempted_cas_resolution_count = len(before_candidates) if resolve_cas else 0
+    resolved_cas_count = sum(
+        resolution["status"] == "resolved" for resolution in cas_resolutions
     )
     unresolved_cas_count = attempted_cas_resolution_count - resolved_cas_count
     destination = _destination(source, output_path, tag="parsed", suffix=".json")
@@ -1031,10 +1016,11 @@ def parse_scifinder_rdf(
             "confirm_pubchem": confirm_pubchem,
             "cas_count": len(cas_values),
             "unique_cas_count": len(set(cas_values)),
-            "cas_resolution_candidate_count": len(resolution_candidates),
+            "cas_resolution_candidate_count": len(resolution_candidates_after),
             "attempted_cas_resolution_count": attempted_cas_resolution_count,
             "resolved_cas_count": resolved_cas_count,
             "unresolved_cas_count": unresolved_cas_count,
+            "cas_resolutions": cas_resolutions,
         },
     )
     with tempfile.TemporaryDirectory(prefix=".rdf-", dir=destination.parent) as stage_dir:
@@ -1044,7 +1030,7 @@ def parse_scifinder_rdf(
         )
         _assert_output(temporary)
         _commit_staged_outputs([(temporary, destination)])
-    return payload
+    return artifact_safety.with_artifacts(payload, [destination])
 
 
 def segment_large_scheme(

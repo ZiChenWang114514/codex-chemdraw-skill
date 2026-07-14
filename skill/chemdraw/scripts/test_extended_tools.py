@@ -255,7 +255,7 @@ class ExtendedToolContractTests(unittest.TestCase):
         with mock.patch.object(
             extended_tools, "_render_cdxml", side_effect=lambda src, dst, dpi: write_png(dst)
         ), mock.patch.object(extended_tools.os, "link", side_effect=racing_link):
-            with self.assertRaises(FileExistsError):
+            with self.assertRaisesRegex(ValueError, "overwrite"):
                 extended_tools.render_cdxml_files(
                     [str(self.source)], output_dir=str(output_dir)
                 )
@@ -555,7 +555,11 @@ class ExtendedToolContractTests(unittest.TestCase):
                 str(self.root), experiment="EXP-1", output_path=str(destination)
             )
         on_disk = json.loads(destination.read_text(encoding="utf-8"))
-        self.assertEqual(on_disk, result)
+        self.assertEqual(on_disk["outputs"], result["outputs"])
+        self.assertEqual(on_disk["warnings"], result["warnings"])
+        self.assertEqual(
+            result["metadata"]["artifacts"][0]["path"], str(destination.resolve())
+        )
 
     def test_discovery_commit_failure_leaves_no_final_json(self):
         destination = self.root / "discovery.json"
@@ -954,7 +958,14 @@ class ExtendedToolContractTests(unittest.TestCase):
         rdf = self.root / "reaction.rdf"
         rdf.write_text("$RDFILE 1\n", encoding="utf-8")
         reaction = object()
-        record = {
+        before_record = {
+            "reactants": [{"cas": "50-00-0"}],
+            "products": [{"cas": "50-00-0"}],
+            "variations": [
+                {"reagents": [{"cas": "64-17-5"}]}
+            ],
+        }
+        after_record = {
             "reactants": [{"cas": "50-00-0"}],
             "products": [{"cas": "50-00-0"}],
             "variations": [
@@ -965,7 +976,7 @@ class ExtendedToolContractTests(unittest.TestCase):
         with mocked_module(
             "cdxml_toolkit.perception.rdf_parser",
             parse_rdf=mock.Mock(return_value=[reaction]),
-            reaction_to_dict=mock.Mock(return_value=record),
+            reaction_to_dict=mock.Mock(side_effect=[before_record, after_record]),
             resolve_cas_numbers=resolve,
         ):
             result = extended_tools.parse_scifinder_rdf(
@@ -977,6 +988,64 @@ class ExtendedToolContractTests(unittest.TestCase):
         self.assertEqual(result["metadata"]["attempted_cas_resolution_count"], 1)
         self.assertEqual(result["metadata"]["resolved_cas_count"], 1)
         self.assertEqual(result["metadata"]["unresolved_cas_count"], 0)
+
+    def test_rdf_does_not_count_preexisting_name_as_cas_resolution(self):
+        rdf = self.root / "reaction.rdf"
+        rdf.write_text("$RDFILE 1\n", encoding="utf-8")
+        reaction = object()
+        unchanged = {
+            "variations": [
+                {"reagents": [{"cas": "64-17-5", "name": "ethanol"}]}
+            ]
+        }
+        with mocked_module(
+            "cdxml_toolkit.perception.rdf_parser",
+            parse_rdf=mock.Mock(return_value=[reaction]),
+            reaction_to_dict=mock.Mock(return_value=unchanged),
+            resolve_cas_numbers=mock.Mock(),
+        ):
+            result = extended_tools.parse_scifinder_rdf(
+                str(rdf), resolve_cas=True, confirm_pubchem=True
+            )
+
+        self.assertEqual(result["metadata"]["resolved_cas_count"], 0)
+        self.assertEqual(result["metadata"]["unresolved_cas_count"], 1)
+        self.assertEqual(
+            result["metadata"]["cas_resolutions"],
+            [
+                {
+                    "cas": "64-17-5",
+                    "status": "unresolved",
+                    "fields_added": [],
+                }
+            ],
+        )
+
+    def test_rdf_snapshots_fields_before_in_place_resolution(self):
+        rdf = self.root / "reaction.rdf"
+        rdf.write_text("$RDFILE 1\n", encoding="utf-8")
+        reaction = object()
+        shared_record = {
+            "variations": [{"reagents": [{"cas": "64-17-5"}]}]
+        }
+
+        def resolve(_reaction):
+            shared_record["variations"][0]["reagents"][0]["name"] = "ethanol"
+
+        with mocked_module(
+            "cdxml_toolkit.perception.rdf_parser",
+            parse_rdf=mock.Mock(return_value=[reaction]),
+            reaction_to_dict=mock.Mock(return_value=shared_record),
+            resolve_cas_numbers=resolve,
+        ):
+            result = extended_tools.parse_scifinder_rdf(
+                str(rdf), resolve_cas=True, confirm_pubchem=True
+            )
+
+        self.assertEqual(result["metadata"]["resolved_cas_count"], 1)
+        self.assertEqual(
+            result["metadata"]["cas_resolutions"][0]["fields_added"], ["name"]
+        )
 
     def test_lab_book_failure_leaves_no_partial_output(self):
         destination = self.root / "assembled.txt"

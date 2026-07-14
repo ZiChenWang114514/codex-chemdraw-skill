@@ -20,20 +20,24 @@ def _signature(function) -> str:
     return str(signature.replace(parameters=parameters))
 
 
+def _description(text: str | None) -> str:
+    return "\n".join(line.rstrip() for line in (text or "No public docstring.").splitlines())
+
+
 def render_reference() -> str:
     registry = build_registry()
     groups = [
         (
             "Official toolkit tools",
-            {name: spec.function for name, spec in registry.items() if spec.group == "official"},
+            {name: spec for name, spec in registry.items() if spec.group == "official"},
         ),
         (
             "Skill remote tools",
-            {name: spec.function for name, spec in registry.items() if spec.group == "remote"},
+            {name: spec for name, spec in registry.items() if spec.group == "remote"},
         ),
         (
             "Skill extended tools",
-            {name: spec.function for name, spec in registry.items() if spec.group == "extended"},
+            {name: spec for name, spec in registry.items() if spec.group == "extended"},
         ),
     ]
     lines = [
@@ -45,12 +49,12 @@ def render_reference() -> str:
     ]
     for title, tools in groups:
         lines.extend([f"## {title}", ""])
-        for name, function in tools.items():
+        for name, spec in tools.items():
             lines.extend(
                 [
-                    f"### `{name}{_signature(function)}`",
+                    f"### `{name}{_signature(spec.function)}`",
                     "",
-                    inspect.getdoc(function) or "No public docstring.",
+                    _description(spec.description),
                     "",
                 ]
             )

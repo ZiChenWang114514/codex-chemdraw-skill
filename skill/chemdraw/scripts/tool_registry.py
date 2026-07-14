@@ -56,15 +56,18 @@ def build_registry() -> dict[str, ToolSpec]:
     for tool in upstream.mcp._tool_manager.list_tools():
         override = OFFICIAL_OVERRIDES.get(tool.name)
         function = override or tool.fn
+        upstream_description = tool.description or inspect.getdoc(tool.fn) or tool.name
+        description = upstream_description
+        if override is not None:
+            description = (
+                f"{upstream_description}\n\nSafety override: "
+                f"{inspect.getdoc(override) or 'transactional artifact publication'}"
+            )
         official[tool.name] = ToolSpec(
             name=tool.name,
             function=function,
             title=tool.title,
-            description=(
-                inspect.getdoc(function)
-                if override is not None
-                else tool.description or inspect.getdoc(function) or tool.name
-            ),
+            description=description,
             annotations=tool.annotations,
             group="official",
             resource_class=_resource_class(tool.name),

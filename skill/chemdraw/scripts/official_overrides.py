@@ -1,37 +1,287 @@
-"""Safety-preserving replacements for selected official MCP tools."""
+"""Transactional replacements for official MCP tools that write artifacts."""
 
 from __future__ import annotations
 
-import os
+import inspect
 from pathlib import Path
-import uuid
+import tempfile
+from typing import Any, Optional, Union
+
+import artifact_safety
 
 
-def _new_destination(office: Path, output_path: str | None) -> Path:
-    if output_path:
-        destination = Path(output_path).expanduser().resolve()
-        if destination.exists():
-            raise ValueError(f"Refusing to overwrite an existing file: {destination}")
-        if destination.suffix.lower() != office.suffix.lower():
-            raise ValueError("output_path must use the same Office format as office_path")
-        return destination
-    return office
+_TEMP_OUTPUT = Path(tempfile.gettempdir()) / "codex-chemdraw"
 
 
-def _validate_office_ole(path: Path) -> None:
-    from extended_tools import _validate_office_package
+def _raw_upstream(function):
+    wrapped = getattr(function, "__wrapped__", None)
+    return wrapped if inspect.isfunction(wrapped) else function
 
-    _validate_office_package(path, expected_ole_objects=1)
+
+def _validate_generated(path: Path, *, office_objects: int | None = None) -> None:
+    artifact_safety.validate_artifact(path)
+    from extended_tools import _assert_output
+
+    _assert_output(path, expected_ole_objects=office_objects)
 
 
-def _commit_no_clobber(temporary: Path, destination: Path) -> None:
-    destination.parent.mkdir(parents=True, exist_ok=True)
+def _destination(
+    source: str | Path | None,
+    output_path: str | None,
+    *,
+    tag: str,
+    suffix: str,
+) -> Path:
+    return artifact_safety.resolve_destination(
+        source=source,
+        output_path=output_path,
+        tag=tag,
+        suffix=suffix,
+        base_dir=_TEMP_OUTPUT,
+    )
+
+
+def _publish_upstream_result(
+    result: Any,
+    staged: Path,
+    destination: Path,
+    *,
+    validator=_validate_generated,
+) -> Any:
+    if not isinstance(result, dict) or not result.get("ok"):
+        return result
+    validator(staged)
+    artifact_safety.publish_file(staged, destination)
+    rewritten = artifact_safety.rewrite_paths(result, staged, destination)
+    rewritten["size"] = destination.stat().st_size
+    return artifact_safety.with_artifacts(rewritten, [destination])
+
+
+def _run_file_tool(destination: Path, call, *, validator=_validate_generated) -> Any:
+    with artifact_safety.staging_file(destination) as staged:
+        result = call(staged)
+        return _publish_upstream_result(
+            result, staged, destination, validator=validator
+        )
+
+
+def draw_molecule(mol_json: dict, output_path: Optional[str] = None) -> dict:
+    """Draw a molecule through a validated no-overwrite staging file."""
+    from cdxml_toolkit.mcp_server.server import draw_molecule as upstream
+
+    upstream = _raw_upstream(upstream)
+
+    if not mol_json or (isinstance(mol_json, dict) and not mol_json.get("smiles")):
+        return upstream(mol_json, output_path=output_path)
+    destination = _destination(None, output_path, tag="molecule", suffix=".cdxml")
+    return _run_file_tool(
+        destination,
+        lambda staged: upstream(mol_json, output_path=str(staged)),
+    )
+
+
+def render_scheme(
+    yaml_text: Optional[str] = None,
+    compact_text: Optional[str] = None,
+    json_path: Optional[str] = None,
+    layout: str = "auto",
+    output_path: Optional[str] = None,
+) -> str:
+    """Render a scheme through a validated no-overwrite staging file."""
+    from cdxml_toolkit.mcp_server.server import render_scheme as upstream
+
+    upstream = _raw_upstream(upstream)
+
+    if not any(value is not None for value in (yaml_text, compact_text, json_path)):
+        return upstream(
+            yaml_text=yaml_text,
+            compact_text=compact_text,
+            json_path=json_path,
+            layout=layout,
+            output_path=output_path,
+        )
+    anchor = json_path if json_path else None
+    destination = _destination(anchor, output_path, tag="rendered", suffix=".cdxml")
+    return _run_file_tool(
+        destination,
+        lambda staged: upstream(
+            yaml_text=yaml_text,
+            compact_text=compact_text,
+            json_path=json_path,
+            layout=layout,
+            output_path=str(staged),
+        ),
+    )
+
+
+def parse_reaction(
+    cdxml: Optional[str] = None,
+    cdx: Optional[str] = None,
+    csv: Optional[str] = None,
+    rxn: Optional[str] = None,
+    input_dir: Optional[str] = None,
+    output_path: Optional[str] = None,
+) -> dict:
+    """Parse a reaction and atomically publish its JSON descriptor."""
+    from cdxml_toolkit.mcp_server.server import parse_reaction as upstream
+
+    upstream = _raw_upstream(upstream)
+
+    if not any((cdxml, cdx, csv, rxn, input_dir)):
+        return upstream()
+    anchor = next((value for value in (cdxml, cdx, csv, rxn) if value), None)
+    if anchor is None and input_dir:
+        anchor = Path(input_dir) / "reaction"
+    destination = _destination(anchor, output_path, tag="parsed", suffix=".json")
+    return _run_file_tool(
+        destination,
+        lambda staged: upstream(
+            cdxml=cdxml,
+            cdx=cdx,
+            csv=csv,
+            rxn=rxn,
+            input_dir=input_dir,
+            output_path=str(staged),
+        ),
+    )
+
+
+def parse_scheme(cdxml_path: str, output_path: Optional[str] = None) -> dict:
+    """Parse a scheme and atomically publish its JSON descriptor."""
+    from cdxml_toolkit.mcp_server.server import parse_scheme as upstream
+
+    upstream = _raw_upstream(upstream)
+
+    if not cdxml_path or not cdxml_path.strip():
+        return upstream(cdxml_path, output_path=output_path)
+    destination = _destination(cdxml_path, output_path, tag="parsed", suffix=".json")
+    return _run_file_tool(
+        destination,
+        lambda staged: upstream(cdxml_path, output_path=str(staged)),
+    )
+
+
+def convert_cdx_cdxml(
+    input_path: str,
+    output_path: Optional[str] = None,
+) -> dict:
+    """Convert CDX/CDXML through a validated no-overwrite staging file."""
+    from cdxml_toolkit.mcp_server.server import convert_cdx_cdxml as upstream
+
+    upstream = _raw_upstream(upstream)
+
+    if not input_path or not input_path.strip():
+        return upstream(input_path, output_path=output_path)
+    source = artifact_safety.validate_input_file(
+        input_path, suffixes=(".cdx", ".cdxml")
+    )
+    suffix = ".cdxml" if source.suffix.lower() == ".cdx" else ".cdx"
+    destination = _destination(source, output_path, tag="converted", suffix=suffix)
+    return _run_file_tool(
+        destination,
+        lambda staged: upstream(str(source), output_path=str(staged)),
+    )
+
+
+def parse_analysis_file(
+    pdf_path: str,
+    output_path: Optional[str] = None,
+) -> dict:
+    """Parse an analysis file and atomically publish verified JSON."""
+    from cdxml_toolkit.mcp_server.server import parse_analysis_file as upstream
+
+    upstream = _raw_upstream(upstream)
+
+    if not pdf_path or not pdf_path.strip():
+        return upstream(pdf_path, output_path=output_path)
+    destination = _destination(pdf_path, output_path, tag="parsed", suffix=".json")
+    return _run_file_tool(
+        destination,
+        lambda staged: upstream(pdf_path, output_path=str(staged)),
+    )
+
+
+def format_lab_entry(
+    entries_json: Union[list[dict], dict, str],
+    output_path: Optional[str] = None,
+) -> dict:
+    """Format a lab entry and atomically publish verified text."""
+    from cdxml_toolkit.mcp_server.server import format_lab_entry as upstream
+
+    upstream = _raw_upstream(upstream)
+
+    if entries_json in (None, [], {}, ""):
+        return upstream(entries_json, output_path=output_path)
+    destination = _destination(None, output_path, tag="lab_entry", suffix=".txt")
+    return _run_file_tool(
+        destination,
+        lambda staged: upstream(entries_json, output_path=str(staged)),
+    )
+
+
+def extract_cdxml_from_office(
+    file_path: str,
+    output_dir: Optional[str] = None,
+) -> dict:
+    """Extract every object transactionally; publish nothing on partial failure."""
+    if not file_path or not file_path.strip():
+        from cdxml_toolkit.mcp_server.server import extract_cdxml_from_office as upstream
+
+        upstream = _raw_upstream(upstream)
+        return upstream(file_path, output_dir=output_dir)
+
+    from cdxml_toolkit.office.ole_extractor import extract_from_office
+
+    source = artifact_safety.validate_input_file(
+        file_path, suffixes=(".pptx", ".docx", ".xlsx", ".xls")
+    )
+    destination = artifact_safety.resolve_directory_destination(
+        source=source, output_dir=output_dir, tag="chemdraw"
+    )
     try:
-        os.link(temporary, destination)
-    except FileExistsError as exc:
-        raise ValueError(f"Refusing to overwrite an existing file: {destination}") from exc
-    finally:
-        temporary.unlink(missing_ok=True)
+        with artifact_safety.staging_directory(destination) as staged:
+            results = extract_from_office(
+                str(source), output_dir=str(staged), output_format="cdxml"
+            )
+            objects = []
+            failures = []
+            for result in results:
+                entry: dict[str, Any] = {"source_path": result.source_path}
+                if result.cdxml_output:
+                    artifact_safety.validate_artifact(result.cdxml_output)
+                    entry["cdxml_output"] = result.cdxml_output
+                if result.cdx_output:
+                    artifact_safety.validate_artifact(result.cdx_output)
+                    entry["cdx_output"] = result.cdx_output
+                if result.error:
+                    entry["error"] = result.error
+                    failures.append(str(result.error))
+                objects.append(entry)
+            if failures:
+                return {
+                    "ok": False,
+                    "error": "Extraction was rolled back: " + "; ".join(failures),
+                    "input": str(source),
+                }
+            artifact_safety.publish_directory(staged, destination)
+        rewritten = artifact_safety.rewrite_paths(objects, staged, destination)
+        paths = artifact_safety.paths_from_value(rewritten)
+        return artifact_safety.with_artifacts(
+            {
+                "ok": True,
+                "input": str(source),
+                "output_dir": str(destination),
+                "count": len(rewritten),
+                "objects": rewritten,
+            },
+            paths,
+        )
+    except Exception as exc:
+        return {
+            "ok": False,
+            "error": f"Extraction failed validation: {exc}",
+            "input": str(source),
+        }
 
 
 def embed_cdxml_in_office(
@@ -39,18 +289,12 @@ def embed_cdxml_in_office(
     office_path: str,
     output_path: str | None = None,
 ) -> dict:
-    """Create a new PPTX or DOCX containing one editable ChemDraw OLE object.
+    """Create a new validated PPTX or DOCX and reject all existing targets."""
+    from cdxml_toolkit.mcp_server.server import embed_cdxml_in_office as upstream
 
-    This safety override rejects an existing ``office_path`` because the upstream
-    builder creates a new package and cannot preserve existing slides or paragraphs.
-    It also refuses all destination overwrites and validates the OOXML and CFB/OLE
-    structures before publishing the new file.
-    """
-    from cdxml_toolkit.mcp_server.server import embed_cdxml_in_office as upstream_embed
+    upstream = _raw_upstream(upstream)
 
-    source = Path(cdxml_path).expanduser().resolve()
-    if not source.is_file() or source.suffix.lower() != ".cdxml":
-        return {"ok": False, "error": f"CDXML input does not exist: {source}"}
+    source = artifact_safety.validate_input_file(cdxml_path, suffixes=(".cdxml",))
     office = Path(office_path).expanduser().resolve()
     if office.suffix.lower() not in {".pptx", ".docx"}:
         return {"ok": False, "error": "office_path must end in .pptx or .docx"}
@@ -63,28 +307,60 @@ def embed_cdxml_in_office(
             ),
         }
     try:
-        destination = _new_destination(office, output_path)
+        destination = artifact_safety.resolve_destination(
+            source=None,
+            output_path=output_path or str(office),
+            tag="office",
+            suffix=office.suffix,
+        )
     except ValueError as exc:
         return {"ok": False, "error": str(exc)}
 
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_name(
-        f".{destination.stem}.{uuid.uuid4().hex}.tmp{destination.suffix}"
-    )
+    def validate(path: Path) -> None:
+        _validate_generated(path, office_objects=1)
+
     try:
-        result = upstream_embed(str(source), str(office), str(temporary))
-        if not isinstance(result, dict) or not result.get("ok"):
-            return result if isinstance(result, dict) else {
-                "ok": False,
-                "error": "Official Office embedder returned an invalid result",
-            }
-        _validate_office_ole(temporary)
-        _commit_no_clobber(temporary, destination)
-        return {**result, "output": str(destination), "created_new_file": True}
+        result = _run_file_tool(
+            destination,
+            lambda staged: upstream(str(source), str(office), str(staged)),
+            validator=validate,
+        )
+        if isinstance(result, dict) and result.get("ok"):
+            result["output"] = str(destination)
+            result["created_new_file"] = True
+        return result
     except Exception as exc:
         return {"ok": False, "error": f"Embedding failed validation: {exc}"}
-    finally:
-        temporary.unlink(missing_ok=True)
 
 
-OFFICIAL_OVERRIDES = {"embed_cdxml_in_office": embed_cdxml_in_office}
+def render_to_png(
+    cdxml_path: str,
+    output_path: Optional[str] = None,
+) -> dict:
+    """Render CDXML to a validated PNG through a staging file."""
+    from cdxml_toolkit.mcp_server.server import render_to_png as upstream
+
+    upstream = _raw_upstream(upstream)
+
+    if not cdxml_path or not cdxml_path.strip():
+        return upstream(cdxml_path, output_path=output_path)
+    source = artifact_safety.validate_input_file(cdxml_path, suffixes=(".cdxml",))
+    destination = _destination(source, output_path, tag="rendered", suffix=".png")
+    return _run_file_tool(
+        destination,
+        lambda staged: upstream(str(source), output_path=str(staged)),
+    )
+
+
+OFFICIAL_OVERRIDES = {
+    "draw_molecule": draw_molecule,
+    "render_scheme": render_scheme,
+    "parse_reaction": parse_reaction,
+    "parse_scheme": parse_scheme,
+    "convert_cdx_cdxml": convert_cdx_cdxml,
+    "parse_analysis_file": parse_analysis_file,
+    "format_lab_entry": format_lab_entry,
+    "extract_cdxml_from_office": extract_cdxml_from_office,
+    "embed_cdxml_in_office": embed_cdxml_in_office,
+    "render_to_png": render_to_png,
+}
