@@ -14,6 +14,7 @@ Exact signatures are generated in [mcp-signatures.md](mcp-signatures.md). This f
 - `tool_timeout`: the isolated worker exceeded `CHEMDRAW_MCP_WORKER_TIMEOUT_SECONDS`; inspect input size and runtime health before retrying.
 - `worker_launch_failed`: Python or the worker script could not start; run runtime discovery and the health check.
 - `tool_cancelled`: the request was cancelled and the worker process tree was terminated.
+- `resource_busy`: another worker held the ChemDraw COM mutex for the request's timeout. Retry after the active native operation finishes; do not start parallel GUI automation.
 - `worker_output_limit`: stdout or stderr exceeded `CHEMDRAW_MCP_WORKER_OUTPUT_BYTES`; inspect the local diagnostic log rather than raising the limit blindly.
 - `worker_protocol_error`: the isolated worker did not return a valid JSON envelope. Treat this as a runtime defect, not a chemistry result.
 - `tool_execution_failed`: a tool raised an input, chemistry, COM, parser, or write error. MCP receives a stable error id; details remain in the user-local worker log.

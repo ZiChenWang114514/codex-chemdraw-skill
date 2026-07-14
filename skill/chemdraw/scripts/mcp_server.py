@@ -56,12 +56,13 @@ def _timeout(value: int | None = None) -> int:
 def _worker_environment() -> dict[str, str]:
     exact = {
         "ALL_PROXY", "APPDATA", "COMSPEC", "HOMEDRIVE", "HOMEPATH",
+        "CONDA_PREFIX", "JAVA_HOME",
         "HTTP_PROXY", "HTTPS_PROXY", "LOCALAPPDATA", "NO_PROXY", "PATH",
         "PATHEXT", "PROGRAMDATA", "PROGRAMFILES", "PROGRAMFILES(X86)",
         "PROGRAMW6432", "REQUESTS_CA_BUNDLE", "SSL_CERT_FILE", "SYSTEMROOT",
         "TEMP", "TMP", "USERPROFILE", "WINDIR",
     }
-    prefixes = ("CHEMDRAW_", "DECIMER_", "TF_")
+    prefixes = ("CHEMDRAW_", "CHEMSCRIPT_", "DECIMER_", "TF_")
     environment = {
         key: value
         for key, value in os.environ.items()
@@ -305,7 +306,12 @@ def _run_worker_impl(
     output_limit = _positive_env_int(
         "CHEMDRAW_MCP_WORKER_OUTPUT_BYTES", DEFAULT_WORKER_OUTPUT_BYTES
     )
-    payload = json.dumps({"tool": name, "args": args, "kwargs": kwargs}).encode("utf-8")
+    payload = json.dumps({
+        "tool": name,
+        "args": args,
+        "kwargs": kwargs,
+        "timeout_seconds": timeout,
+    }).encode("utf-8")
     if len(payload) > input_limit:
         return {
             "ok": False,

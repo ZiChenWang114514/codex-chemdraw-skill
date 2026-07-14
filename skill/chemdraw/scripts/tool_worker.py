@@ -12,6 +12,8 @@ import sys
 import traceback
 import uuid
 
+from resource_lock import ResourceBusyError, native_resource_lock
+
 
 DEFAULT_WORKER_INPUT_BYTES = 16 * 1024 * 1024
 
@@ -79,6 +81,36 @@ def _read_payload() -> dict:
     return payload
 
 
+def _error_envelope(exc: BaseException) -> tuple[dict, int]:
+    if isinstance(exc, ResourceBusyError):
+        return (
+            {
+                "ok": False,
+                "error": {
+                    "code": "resource_busy",
+                    "message": str(exc),
+                },
+            },
+            3,
+        )
+    error_id = _failure_log(exc)
+    return (
+        {
+            "ok": False,
+            "error": {
+                "code": "tool_execution_failed",
+                "message": "Tool execution failed; inspect the local diagnostic log",
+                "id": error_id,
+            },
+        },
+        1,
+    )
+
+
+def _resource_timeout(worker_timeout_seconds: int) -> int:
+    return max(1, worker_timeout_seconds - 5)
+
+
 def main() -> int:
     try:
         payload = _read_payload()
@@ -103,23 +135,23 @@ def main() -> int:
                 "error": {"code": "unknown_tool", "message": "Requested tool is not registered"},
             })
             return 2
-        with redirect_stdout(sys.stderr):
-            result = spec.function(*payload.get("args", []), **payload.get("kwargs", {}))
-            if inspect.isawaitable(result):
-                result = asyncio.run(result)
+        timeout_seconds = payload.get("timeout_seconds", 570)
+        if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, int):
+            raise ValueError("Worker timeout must be an integer")
+        with native_resource_lock(
+            spec.resource_class,
+            _resource_timeout(timeout_seconds),
+        ):
+            with redirect_stdout(sys.stderr):
+                result = spec.function(*payload.get("args", []), **payload.get("kwargs", {}))
+                if inspect.isawaitable(result):
+                    result = asyncio.run(result)
         _write_envelope({"ok": True, "result": _jsonable(result)})
         return 0
     except BaseException as exc:
-        error_id = _failure_log(exc)
-        _write_envelope({
-            "ok": False,
-            "error": {
-                "code": "tool_execution_failed",
-                "message": "Tool execution failed; inspect the local diagnostic log",
-                "id": error_id,
-            },
-        })
-        return 1
+        envelope, return_code = _error_envelope(exc)
+        _write_envelope(envelope)
+        return return_code
 
 
 if __name__ == "__main__":

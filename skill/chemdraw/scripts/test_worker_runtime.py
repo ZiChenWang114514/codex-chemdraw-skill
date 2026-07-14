@@ -7,11 +7,13 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from unittest import mock
 
 import mcp_server
+import resource_lock
 import tool_worker
 
 
@@ -34,6 +36,92 @@ def write_valid_office(path: str | Path) -> None:
 
 
 class WorkerRuntimeTests(unittest.TestCase):
+    def test_worker_environment_preserves_runtime_configuration_and_filters_secrets(self):
+        configured = {
+            "CHEMSCRIPT_DLL_DIR": r"C:\ChemScript\bin",
+            "CHEMSCRIPT_ASSEMBLY": "CambridgeSoft.ChemScript23",
+            "CONDA_PREFIX": r"C:\conda\envs\cdxml",
+            "JAVA_HOME": r"C:\Java\jdk",
+            "CHEMDRAW_EXE": r"C:\ChemDraw.exe",
+            "ANTHROPIC_AUTH_TOKEN": "must-not-cross-worker-boundary",
+        }
+        with mock.patch.dict(os.environ, configured, clear=False):
+            environment = mcp_server._worker_environment()
+
+        for key in (
+            "CHEMSCRIPT_DLL_DIR",
+            "CHEMSCRIPT_ASSEMBLY",
+            "CONDA_PREFIX",
+            "JAVA_HOME",
+            "CHEMDRAW_EXE",
+        ):
+            self.assertEqual(environment[key], configured[key])
+        self.assertNotIn("ANTHROPIC_AUTH_TOKEN", environment)
+
+    def test_registry_marks_native_chemdraw_tools_only(self):
+        import tool_registry
+
+        specs = tool_registry.build_registry()
+        for name in (
+            "parse_reaction",
+            "convert_cdx_cdxml",
+            "render_to_png",
+            "extract_cdxml_from_office",
+            "embed_cdxml_in_office",
+            "clean_scheme_layout",
+            "merge_reaction_schemes",
+            "polish_reaction_scheme",
+            "render_cdxml_files",
+            "fill_office_template",
+            "batch_embed_cdxml_in_office",
+        ):
+            self.assertEqual(specs[name].resource_class, "chemdraw_com", name)
+        for name in ("resolve_name", "modify_molecule", "draw_molecule", "parse_scheme"):
+            self.assertIsNone(specs[name].resource_class, name)
+
+    @unittest.skipUnless(os.name == "nt", "Windows named mutex behavior")
+    def test_named_chemdraw_mutex_serializes_callers(self):
+        first_entered = threading.Event()
+        release_first = threading.Event()
+        second_entered = threading.Event()
+
+        def first():
+            with resource_lock.native_resource_lock("chemdraw_com", 5):
+                first_entered.set()
+                release_first.wait(5)
+
+        def second():
+            first_entered.wait(5)
+            with resource_lock.native_resource_lock("chemdraw_com", 5):
+                second_entered.set()
+
+        first_thread = threading.Thread(target=first)
+        second_thread = threading.Thread(target=second)
+        first_thread.start()
+        second_thread.start()
+        self.assertTrue(first_entered.wait(2))
+        self.assertFalse(second_entered.wait(0.2))
+        release_first.set()
+        self.assertTrue(second_entered.wait(2))
+        first_thread.join(2)
+        second_thread.join(2)
+        self.assertFalse(first_thread.is_alive())
+        self.assertFalse(second_thread.is_alive())
+
+    def test_worker_reports_resource_busy_without_diagnostic_log(self):
+        error = resource_lock.ResourceBusyError("chemdraw_com", 2)
+        with mock.patch("tool_worker._failure_log") as failure_log:
+            envelope, return_code = tool_worker._error_envelope(error)
+        self.assertEqual(return_code, 3)
+        self.assertEqual(envelope["error"]["code"], "resource_busy")
+        self.assertNotIn("id", envelope["error"])
+        failure_log.assert_not_called()
+
+    def test_resource_wait_finishes_before_parent_worker_timeout(self):
+        self.assertEqual(tool_worker._resource_timeout(570), 565)
+        self.assertEqual(tool_worker._resource_timeout(5), 1)
+        self.assertEqual(tool_worker._resource_timeout(1), 1)
+
     def test_timeout_is_structured_and_terminates_worker_tree(self):
         process = mock.Mock()
         process.poll.return_value = None

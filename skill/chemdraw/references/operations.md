@@ -15,6 +15,10 @@ Path precedence is explicit argument, environment variable, active Conda/current
 - `CHEMDRAW_MCP_WORKER_INPUT_BYTES`
 - `CHEMDRAW_MCP_WORKER_OUTPUT_BYTES`
 
+Workers also preserve `CHEMSCRIPT_*`, `CONDA_PREFIX`, and `JAVA_HOME` so an
+explicitly configured ChemScript or Java runtime remains visible after process
+isolation. Credentials and unrelated shell variables are not forwarded.
+
 Run `scripts/runtime_discovery.py` from Python when debugging discovery code. Generate MCP configuration with `scripts/configure_mcp.ps1`; it is read-only unless `-Apply` is supplied.
 
 ## Health And Smoke Tests
@@ -38,6 +42,7 @@ Read [decimer-api.md](decimer-api.md) for the HTTP contract.
 
 - MCP startup timeout: verify discovered Python and import `mcp_server.py` directly.
 - Tool timeout: raise the worker timeout only after confirming the operation is legitimately long-running.
+- Native resource busy: ChemDraw COM operations share a named per-user mutex. Let the active render, conversion, or Office operation finish before retrying; ordinary parsing remains concurrent.
 - Worker error id: inspect `%LOCALAPPDATA%\Codex\chemdraw-mcp\logs\worker-<id>.log`; detailed exceptions are intentionally not returned over MCP.
 - COM failure: close visible ChemDraw documents, verify registration, and run the smoke test.
 - License or activation window: stop validation. With both 32-bit and 64-bit ChemDraw installed, verify which registry view and Python bitness selected `/Automation`; do not alter an activated interactive installation as a shortcut.

@@ -22,6 +22,26 @@ class ToolSpec:
     annotations: Any = None
     return_json_text: bool = False
     group: str = "official"
+    resource_class: str | None = None
+
+
+CHEMDRAW_COM_TOOLS = {
+    "parse_reaction",
+    "convert_cdx_cdxml",
+    "render_to_png",
+    "extract_cdxml_from_office",
+    "embed_cdxml_in_office",
+    "clean_scheme_layout",
+    "merge_reaction_schemes",
+    "polish_reaction_scheme",
+    "render_cdxml_files",
+    "fill_office_template",
+    "batch_embed_cdxml_in_office",
+}
+
+
+def _resource_class(name: str) -> str | None:
+    return "chemdraw_com" if name in CHEMDRAW_COM_TOOLS else None
 
 
 def _merge_named_tools(existing: dict, incoming: dict, *, source: str) -> dict:
@@ -47,6 +67,7 @@ def build_registry() -> dict[str, ToolSpec]:
             ),
             annotations=tool.annotations,
             group="official",
+            resource_class=_resource_class(tool.name),
         )
 
     remote = {
@@ -57,6 +78,7 @@ def build_registry() -> dict[str, ToolSpec]:
             description=inspect.getdoc(function) or name,
             return_json_text=True,
             group="remote",
+            resource_class=_resource_class(name),
         )
         for name, function in REMOTE_TOOLS.items()
     }
@@ -68,6 +90,7 @@ def build_registry() -> dict[str, ToolSpec]:
             description=inspect.getdoc(function) or name,
             return_json_text=True,
             group="extended",
+            resource_class=_resource_class(name),
         )
         for name, function in PUBLIC_TOOLS.items()
     }
