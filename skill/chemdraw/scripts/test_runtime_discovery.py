@@ -321,7 +321,7 @@ class PowerShellHarness:
                     capabilities = {
                         "python": {"status": "available"},
                         "cdxml_toolkit": {"status": "available", "version": "0.5.17"},
-                        "tool_registry": {"status": "available", "count": 28},
+                        "tool_registry": {"status": "available", "count": 30},
                         "decimer_models": {"status": "missing"},
                     }
                     if "--native-probe" in args:
@@ -332,7 +332,7 @@ class PowerShellHarness:
                         "ok": True,
                         "outputs": {"capabilities": capabilities},
                         "warnings": ["decimer_models: capability is unavailable"],
-                        "metadata": {"tool_count": 28, "network_used": False},
+                        "metadata": {"tool_count": 30, "network_used": False},
                     }))
                 raise SystemExit(0)
                 """

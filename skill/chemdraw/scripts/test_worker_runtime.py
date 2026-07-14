@@ -74,6 +74,9 @@ class WorkerRuntimeTests(unittest.TestCase):
             "render_cdxml_files",
             "fill_office_template",
             "batch_embed_cdxml_in_office",
+            "inspect_chemdraw_objects_in_office",
+            "replace_chemdraw_objects_in_office",
+            "diagnose_runtime",
         ):
             self.assertEqual(specs[name].resource_class, "chemdraw_com", name)
         for name in ("resolve_name", "modify_molecule", "draw_molecule", "parse_scheme"):

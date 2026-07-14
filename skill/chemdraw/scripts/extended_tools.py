@@ -798,6 +798,176 @@ def batch_embed_cdxml_in_office(
     return _contract({"office": str(destination)}, metadata={"objects_embedded": len(items)})
 
 
+def inspect_chemdraw_objects_in_office(
+    input_path: str,
+    output_dir: Optional[str] = None,
+    render_previews: bool = True,
+) -> dict[str, Any]:
+    """Inventory editable ChemDraw objects and extract numbered CDXML previews."""
+    source = _source(input_path, suffixes=(".pptx", ".docx"))
+    destination = artifact_safety.resolve_directory_destination(
+        source=source,
+        output_dir=output_dir,
+        tag="chemdraw_objects",
+    )
+    import office_objects
+
+    with artifact_safety.staging_directory(destination) as staged:
+        manifest = office_objects.write_inspection(
+            source,
+            staged,
+            render_previews=render_previews,
+        )
+        manifest_path = staged / "manifest.json"
+        artifact_safety.validate_artifact(manifest_path)
+        for item in manifest["objects"]:
+            _assert_output(staged / item["cdxml"])
+            if item.get("preview_png"):
+                _assert_output(staged / item["preview_png"])
+        artifact_safety.publish_directory(staged, destination)
+
+    cdxml_files = [str(destination / item["cdxml"]) for item in manifest["objects"]]
+    previews = [
+        str(destination / item["preview_png"])
+        for item in manifest["objects"]
+        if item.get("preview_png")
+    ]
+    return _contract(
+        {
+            "output_dir": str(destination),
+            "manifest": str(destination / "manifest.json"),
+            "cdxml_files": cdxml_files,
+            "previews": previews,
+        },
+        metadata={
+            "objects": len(manifest["objects"]),
+            "source_sha256": manifest["source_sha256"],
+        },
+    )
+
+
+def _replacement_destination(
+    source: Path,
+    output_path: str | None,
+    *,
+    render_pdf_preview: bool,
+) -> tuple[Path, Path | None]:
+    destination = _destination(source, output_path, tag="replaced")
+    if not render_pdf_preview:
+        return destination, None
+    pdf = destination.with_suffix(".pdf")
+    if output_path is not None and pdf.exists():
+        raise ValueError(f"Refusing to overwrite an existing file: {pdf}")
+    if output_path is None:
+        base = destination
+        index = 2
+        while destination.exists() or pdf.exists():
+            destination = base.with_name(f"{base.stem}_{index}{base.suffix}")
+            pdf = destination.with_suffix(".pdf")
+            index += 1
+    return destination, pdf
+
+
+def replace_chemdraw_objects_in_office(
+    input_path: str,
+    replacements_manifest: str,
+    output_path: Optional[str] = None,
+    render_pdf_preview: bool = True,
+) -> dict[str, Any]:
+    """Replace selected ChemDraw OLE contents and previews without moving them."""
+    source = _source(input_path, suffixes=(".pptx", ".docx"))
+    manifest_path = _source(replacements_manifest, suffixes=(".json",))
+    source_package = _validate_office_package(source)
+    import office_objects
+
+    source_sha256, objects = office_objects.scan_office_objects(source)
+    replacements = office_objects.load_replacement_manifest(
+        manifest_path,
+        source_sha256=source_sha256,
+        objects=objects,
+    )
+    destination, pdf_destination = _replacement_destination(
+        source,
+        output_path,
+        render_pdf_preview=render_pdf_preview,
+    )
+
+    from cdxml_toolkit.office.ole_embedder import batch_convert
+
+    with office_objects.com_apartment():
+        converted = batch_convert(
+            [str(item["replacement_cdxml"]) for item in replacements]
+        )
+    if len(converted) != len(replacements):
+        raise RuntimeError("ChemDraw did not convert every replacement CDXML")
+    replacement_parts: dict[str, dict[str, bytes]] = {}
+    for index, (replacement, converted_item) in enumerate(
+        zip(replacements, converted), start=1
+    ):
+        if not isinstance(converted_item, dict):
+            raise RuntimeError(f"ChemDraw replacement conversion {index} was invalid")
+        cdx_data = converted_item.get("cdx_data")
+        emf_data = converted_item.get("emf_data")
+        if not isinstance(cdx_data, (bytes, bytearray, memoryview)) or not cdx_data:
+            raise RuntimeError(
+                f"ChemDraw replacement conversion {index} returned empty CDX data"
+            )
+        if not isinstance(emf_data, (bytes, bytearray, memoryview)) or not emf_data:
+            raise RuntimeError(
+                f"ChemDraw replacement conversion {index} returned empty EMF data"
+            )
+        try:
+            ole_data = _build_chemdraw_ole(bytes(cdx_data))
+        except ValueError as exc:
+            raise RuntimeError(str(exc)) from exc
+        record = replacement["record"]
+        replacement_parts[replacement["object_id"]] = {
+            "embedding_part": record["embedding_part"],
+            "preview_part": record["preview_part"],
+            "ole_data": ole_data,
+            "emf_data": bytes(emf_data),
+        }
+
+    staged_outputs: list[tuple[Path, Path]] = []
+    with tempfile.TemporaryDirectory(
+        prefix=".replace-office-", dir=destination.parent
+    ) as stage_dir:
+        temporary_office = Path(stage_dir) / destination.name
+        office_objects.rewrite_office_package(
+            source,
+            temporary_office,
+            replacement_parts,
+        )
+        output_package = _assert_output(
+            temporary_office,
+            minimum_chemdraw_objects=source_package["chemdraw_objects"],
+        )
+        if output_package != source_package:
+            raise RuntimeError(
+                "Office replacement changed the package OLE object inventory: "
+                f"before={source_package}, after={output_package}"
+            )
+        staged_outputs.append((temporary_office, destination))
+        if pdf_destination is not None:
+            temporary_pdf = Path(stage_dir) / pdf_destination.name
+            office_objects.render_office_pdf(temporary_office, temporary_pdf)
+            office_objects.validate_pdf(temporary_pdf)
+            staged_outputs.append((temporary_pdf, pdf_destination))
+        _commit_staged_outputs(staged_outputs)
+
+    outputs = {"office": str(destination)}
+    if pdf_destination is not None:
+        outputs["pdf_preview"] = str(pdf_destination)
+    return _contract(
+        outputs,
+        metadata={
+            "objects_replaced": len(replacements),
+            "object_ids": [item["object_id"] for item in replacements],
+            "source_sha256": source_sha256,
+        },
+    )
+
+
 def _discover_experiment(input_dir: str, experiment: str | None):
     from cdxml_toolkit.analysis.deterministic.discover_experiment_files import discover_experiment_files
 
@@ -1079,6 +1249,7 @@ PUBLIC_TOOLS = {
     for fn in (
         clean_scheme_layout, merge_reaction_schemes, polish_reaction_scheme,
         render_cdxml_files, fill_office_template, batch_embed_cdxml_in_office,
+        inspect_chemdraw_objects_in_office, replace_chemdraw_objects_in_office,
         discover_experiment_files, analyze_lcms_series, assemble_lab_book,
         parse_scifinder_rdf, segment_large_scheme, diagnose_runtime,
     )

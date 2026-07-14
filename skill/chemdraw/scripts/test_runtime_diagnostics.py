@@ -29,7 +29,7 @@ class RuntimeDiagnosticsTests(unittest.TestCase):
             result["outputs"]["capabilities"]["cdxml_toolkit"]["version"],
             "0.5.17",
         )
-        self.assertEqual(result["metadata"]["tool_count"], 28)
+        self.assertEqual(result["metadata"]["tool_count"], 30)
         self.assertEqual(
             result["outputs"]["capabilities"]["tool_registry"]["status"],
             "available",

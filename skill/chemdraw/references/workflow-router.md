@@ -32,10 +32,11 @@ Load one section matching the user's intent. Exact signatures live only in [mcp-
 
 ## Work With Office
 
-1. Extract existing editable objects with `extract_cdxml_from_office`.
-2. Modify and native-render the extracted CDXML.
-3. Create a new one-object file with `embed_cdxml_in_office`, create a new collection with `batch_embed_cdxml_in_office`, or preserve an existing template through `fill_office_template`. The single-object tool rejects an existing Office target because the upstream builder cannot preserve its content.
-4. Verify the OOXML package opens and contains OLE relationships.
+1. Use `inspect_chemdraw_objects_in_office` when object identity, host location, geometry, or selective replacement matters. Use `extract_cdxml_from_office` for simple bulk extraction.
+2. Modify and native-render the extracted CDXML. Keep the inspection manifest with its source SHA-256 and stable object IDs.
+3. Use `replace_chemdraw_objects_in_office` to update selected objects in place. Replacement CDXML paths must remain relative to the replacement manifest; inspect the staged PDF preview when requested.
+4. Create a new one-object file with `embed_cdxml_in_office`, create a new collection with `batch_embed_cdxml_in_office`, or preserve an existing template through `fill_office_template`. The single-object tool rejects an existing Office target because the upstream builder cannot preserve its content.
+5. Verify the OOXML package opens, keeps its OLE relationships and geometry, and contains editable ChemDraw objects rather than flat images.
 
 ## Analyze Experiments
 

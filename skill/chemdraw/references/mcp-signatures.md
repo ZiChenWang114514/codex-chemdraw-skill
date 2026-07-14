@@ -524,6 +524,14 @@ Fill PPTX/DOCX text and editable ChemDraw placeholders from a manifest.
 
 Create PPTX or DOCX containing editable ChemDraw OLE objects.
 
+### `inspect_chemdraw_objects_in_office(input_path: str, output_dir: Optional[str] = None, render_previews: bool = True) -> 'dict[str, Any]'`
+
+Inventory editable ChemDraw objects and extract numbered CDXML previews.
+
+### `replace_chemdraw_objects_in_office(input_path: str, replacements_manifest: str, output_path: Optional[str] = None, render_pdf_preview: bool = True) -> 'dict[str, Any]'`
+
+Replace selected ChemDraw OLE contents and previews without moving them.
+
 ### `discover_experiment_files(input_dir: str, experiment: Optional[str] = None, output_path: Optional[str] = None) -> 'dict[str, Any]'`
 
 Discover and classify files belonging to one experiment.

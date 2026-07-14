@@ -40,7 +40,9 @@ class MCPStdioTests(unittest.TestCase):
     def test_server_initializes_and_lists_expected_schemas(self):
         tools = asyncio.run(asyncio.wait_for(_list_tools(), timeout=30))
         by_name = {tool.name: tool for tool in tools}
-        self.assertEqual(len(by_name), 28)
+        self.assertEqual(len(by_name), 30)
+        self.assertIn("inspect_chemdraw_objects_in_office", by_name)
+        self.assertIn("replace_chemdraw_objects_in_office", by_name)
         self.assertIn("resolve_name", by_name)
         self.assertIn("embed_cdxml_in_office", by_name)
         self.assertIn("extract_structures_via_decimer_api", by_name)
@@ -54,6 +56,22 @@ class MCPStdioTests(unittest.TestCase):
         self.assertEqual(
             set(by_name["embed_cdxml_in_office"].inputSchema.get("required", [])),
             {"cdxml_path", "office_path"},
+        )
+        self.assertEqual(
+            set(
+                by_name["inspect_chemdraw_objects_in_office"].inputSchema.get(
+                    "required", []
+                )
+            ),
+            {"input_path"},
+        )
+        self.assertEqual(
+            set(
+                by_name["replace_chemdraw_objects_in_office"].inputSchema.get(
+                    "required", []
+                )
+            ),
+            {"input_path", "replacements_manifest"},
         )
         remote_properties = by_name[
             "extract_structures_via_decimer_api"

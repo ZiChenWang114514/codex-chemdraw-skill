@@ -9,6 +9,8 @@ Load for CDX/CDXML conversion, native rendering, ChemScript operations, editable
 - Convert one file: MCP `convert_cdx_cdxml`.
 - Native render: MCP `render_to_png` or `render_cdxml_files`.
 - Extract editable Office objects: MCP `extract_cdxml_from_office`. Extraction validates every object in a staging directory and publishes the directory only when all objects succeed.
+- Inspect objects before targeted edits: MCP `inspect_chemdraw_objects_in_office`. It binds each stable object ID to the source SHA-256, host XML, OLE relationship, embedding part, preview relationship, host position, and geometry, then emits numbered CDXML and optional PNG previews.
+- Replace selected objects without moving them: MCP `replace_chemdraw_objects_in_office`. It replaces the selected ChemDraw OLE and linked EMF preview at their existing package paths while preserving host XML, relationship IDs, order, geometry, and all unselected parts.
 - Create a new Office file with one editable object: MCP `embed_cdxml_in_office`; it rejects existing Office targets.
 - Create a PPTX/DOCX collection: MCP `batch_embed_cdxml_in_office`.
 - Fill a template manifest: MCP `fill_office_template`.
@@ -17,11 +19,11 @@ Load for CDX/CDXML conversion, native rendering, ChemScript operations, editable
 
 ## Inputs And Outputs
 
-CDXML is the editable interchange format. Native rendering supports PNG and SVG by extension. Office outputs are PPTX/DOCX packages with ChemDraw OLE data and EMF previews. Template structure references are preflighted from the manifest directory; absolute paths and traversal outside that boundary are rejected by the high-level wrapper.
+CDXML is the editable interchange format. Native rendering supports PNG and SVG by extension. Office outputs are PPTX/DOCX packages with ChemDraw OLE data and EMF previews. Inspection manifests use `schema_version=1` and record the source SHA-256 plus stable object IDs. A replacement manifest supplies the same source SHA-256 and a `replacements` list whose entries contain an object ID and a relative replacement CDXML path. Template and replacement references are preflighted from the manifest directory; absolute paths and traversal outside that boundary are rejected.
 
 ## Failure Modes
 
-ChemDraw COM may fail when registration is missing, documents are locked, unsupported CDXML is opened, or Python bitness selects a different registered automation server than the interactive installation. Office conversion must fail if any required input is missing or if generated OLE data, package relationships, or requested object counts are incomplete. Never replace editable OLE with a flat image without explicit permission.
+ChemDraw COM may fail when registration is missing, documents are locked, unsupported CDXML is opened, or Python bitness selects a different registered automation server than the interactive installation. Office conversion must fail if any required input is missing or if generated OLE data, package relationships, or requested object counts are incomplete. Selective replacement also rejects source-hash drift, duplicate or unknown IDs, missing preview relationships, unsafe paths, existing outputs, and failed Office PDF export; staged outputs are rolled back together. Never replace editable OLE with a flat image without explicit permission.
 
 ## Supporting APIs
 
