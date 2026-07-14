@@ -1,0 +1,57 @@
+name: Bug report
+description: Report a reproducible defect using non-sensitive inputs
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: Do not attach credentials, confidential structures, private lab records, or license material.
+  - type: input
+    id: tool
+    attributes:
+      label: Tool or workflow
+      placeholder: clean_scheme_layout, MCP startup, installer, etc.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Use a synthetic fixture and include exact arguments with secrets and private paths redacted.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and structured error
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Windows, Codex CLI, Python, cdxml-toolkit, ChemDraw, and Office versions/bitness.
+    validations:
+      required: true
+  - type: checkboxes
+    id: boundaries
+    attributes:
+      label: Execution boundaries
+      options:
+        - label: Native ChemDraw or Office automation was involved
+        - label: A remote service or image upload was involved
+        - label: Existing output files were present
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Data confirmation
+      options:
+        - label: I removed secrets and confidential chemistry/data from this report.
+          required: true

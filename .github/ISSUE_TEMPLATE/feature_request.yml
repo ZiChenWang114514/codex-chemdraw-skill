@@ -1,0 +1,41 @@
+name: Feature request
+description: Propose a new workflow or public MCP capability
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: task
+    attributes:
+      label: End-to-end task
+      description: Describe what a Codex user needs to accomplish, not only a low-level function name.
+    validations:
+      required: true
+  - type: textarea
+    id: gap
+    attributes:
+      label: Existing-tool gap
+      description: Explain why the current workflow router and tools are insufficient.
+    validations:
+      required: true
+  - type: textarea
+    id: contract
+    attributes:
+      label: Proposed inputs and outputs
+      description: Include overwrite behavior, warnings, and expected artifacts.
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Verification strategy
+      description: Explain how chemistry, native rendering, Office editability, or analysis output can be validated.
+    validations:
+      required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Privacy and external services
+      description: Identify uploads, external APIs, credentials, and consent requirements.
+    validations:
+      required: true
