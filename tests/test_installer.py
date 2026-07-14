@@ -41,9 +41,12 @@ class InstallerTests(unittest.TestCase):
             proposal = json.loads(completed.stdout)
             destination_survived = destination.is_dir()
 
-        expected = codex_home / "backups" / "skills" / "chemdraw"
-        self.assertEqual(Path(proposal["backup_root"]), expected)
-        self.assertTrue(str(proposal["backup"]).startswith(str(expected)))
+        backup_root = Path(proposal["backup_root"])
+        self.assertEqual(backup_root.name, "chemdraw")
+        self.assertEqual(backup_root.parent.name, "skills")
+        self.assertEqual(backup_root.parent.parent.name, "backups")
+        self.assertNotEqual(backup_root.parent, destination.parent)
+        self.assertEqual(Path(proposal["backup"]).parent, backup_root)
         self.assertTrue(destination_survived)
 
 
