@@ -2,7 +2,7 @@
 
 ## Scope
 
-Treat `skill/chemdraw/` as the deployable Codex Skill and the source of truth for runtime behavior. Keep repository-facing material at the repository root or in `docs/`; do not add README, changelog, contribution, or release files inside the deployable Skill.
+Treat `skill/chemdraw/` as the deployable Codex Skill and the source of truth for runtime behavior. Root Markdown is intentionally limited to `README.md` and `AGENTS.md`. Put detailed project guidance in `docs/guide.md` and GitHub-only policy in `.github/`; do not create standalone changelog, support, conduct, notice, or release ledgers when an existing authoritative section or GitHub feature is sufficient. Do not add repository-facing documents inside the deployable Skill.
 
 ## Skill Design
 

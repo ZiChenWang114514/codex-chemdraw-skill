@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Security fixes target the latest commit on the default branch and the latest published `0.x` release. Older snapshots may not receive backports.
+Security fixes target the latest commit on the default branch and the latest GitHub release, when one exists. Older snapshots may not receive backports.
 
 ## Reporting
 

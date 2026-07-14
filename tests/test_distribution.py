@@ -14,30 +14,44 @@ class DistributionTests(unittest.TestCase):
     def test_required_repository_files_exist(self) -> None:
         required = [
             "README.md",
-            "README.zh-CN.md",
             "LICENSE",
-            "CHANGELOG.md",
-            "CONTRIBUTING.md",
-            "SECURITY.md",
-            "CODE_OF_CONDUCT.md",
-            "SUPPORT.md",
-            "THIRD_PARTY_NOTICES.md",
             "AGENTS.md",
-            "VERSION",
             ".gitignore",
             ".gitattributes",
+            ".github/contributing.md",
+            ".github/SECURITY.md",
             ".github/workflows/validate.yml",
-            ".github/PULL_REQUEST_TEMPLATE.md",
             ".github/ISSUE_TEMPLATE/bug_report.yml",
             ".github/ISSUE_TEMPLATE/feature_request.yml",
-            "docs/installation.md",
-            "docs/architecture.md",
-            "docs/testing.md",
+            "docs/guide.md",
+            "docs/zh-cn.md",
             "scripts/install.ps1",
             "scripts/validate_distribution.py",
         ]
         missing = [item for item in required if not (ROOT / item).is_file()]
         self.assertEqual(missing, [], f"Missing repository files: {missing}")
+
+    def test_root_markdown_is_minimal(self) -> None:
+        root_markdown = {path.name for path in ROOT.glob("*.md")}
+        self.assertEqual(root_markdown, {"README.md", "AGENTS.md"})
+
+    def test_repository_documentation_is_consolidated(self) -> None:
+        repository_markdown = {
+            path.relative_to(ROOT).as_posix()
+            for path in ROOT.rglob("*.md")
+            if path.relative_to(ROOT).parts[0] not in {".git", "skill"}
+        }
+        self.assertEqual(
+            repository_markdown,
+            {
+                "README.md",
+                "AGENTS.md",
+                ".github/contributing.md",
+                ".github/SECURITY.md",
+                "docs/guide.md",
+                "docs/zh-cn.md",
+            },
+        )
 
     def test_skill_bundle_is_self_contained(self) -> None:
         self.assertTrue((SKILL / "SKILL.md").is_file())

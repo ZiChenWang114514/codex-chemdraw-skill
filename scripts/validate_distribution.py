@@ -47,11 +47,6 @@ def validate_skill_metadata() -> list[str]:
         if token not in agent_text:
             errors.append(f"skill/chemdraw/agents/openai.yaml: missing {token}")
 
-    version = (ROOT / "VERSION").read_text(encoding="ascii").strip()
-    if not re.fullmatch(
-        r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)", version
-    ):
-        errors.append(f"VERSION: expected semantic version, got {version!r}")
     return errors
 
 

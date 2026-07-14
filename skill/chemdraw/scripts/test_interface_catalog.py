@@ -5,7 +5,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 import sys
+import tempfile
 import unittest
+from unittest import mock
 
 
 SKILL_ROOT = Path(__file__).resolve().parent.parent
@@ -46,6 +48,20 @@ class InterfaceCatalogTests(unittest.TestCase):
         expected = generate_tool_reference.render_reference()
         actual = (REFERENCES / "mcp-signatures.md").read_text(encoding="utf-8")
         self.assertEqual(actual, expected)
+
+    def test_signature_generator_writes_lf_on_windows(self):
+        sys.path.insert(0, str(SKILL_ROOT / "scripts"))
+        import generate_tool_reference
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output = Path(temp_dir) / "mcp-signatures.md"
+            with mock.patch.object(
+                sys,
+                "argv",
+                ["generate_tool_reference.py", "--output", str(output)],
+            ):
+                self.assertEqual(generate_tool_reference.main(), 0)
+            self.assertNotIn(b"\r\n", output.read_bytes())
 
     def test_decimer_guide_defers_exact_signature_to_generated_reference(self):
         guide = (REFERENCES / "decimer-api.md").read_text(encoding="utf-8")

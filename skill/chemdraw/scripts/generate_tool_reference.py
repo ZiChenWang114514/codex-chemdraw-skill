@@ -63,7 +63,7 @@ def main() -> int:
     args = parser.parse_args()
     content = render_reference()
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(content, encoding="utf-8")
+    args.output.write_text(content, encoding="utf-8", newline="\n")
     print(f"Wrote {args.output} ({len(content)} characters)")
     return 0
 

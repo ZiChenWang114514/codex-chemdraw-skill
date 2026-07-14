@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+import sys
 import tempfile
 import textwrap
 import unittest
+from unittest import mock
 
 
 MODULE_PATH = Path(__file__).with_name("audit_toolkit_interfaces.py")
@@ -111,6 +113,38 @@ class InterfaceAuditTests(unittest.TestCase):
 
             with self.assertRaisesRegex(RuntimeError, r"broken\.py"):
                 auditor.scan_package(root)
+
+    def test_inventory_generator_writes_lf_on_windows(self):
+        auditor = load_auditor()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "sample_pkg"
+            root.mkdir()
+            (root / "example.py").write_text(
+                "def useful() -> bool:\n    return True\n",
+                encoding="utf-8",
+            )
+            output_dir = Path(temp_dir) / "references"
+            with mock.patch.object(
+                sys,
+                "argv",
+                [
+                    "audit_toolkit_interfaces.py",
+                    "--package-root",
+                    str(root),
+                    "--output-dir",
+                    str(output_dir),
+                    "--version",
+                    "0.0.0",
+                ],
+            ):
+                self.assertEqual(auditor.main(), 0)
+            generated = [
+                output_dir / "toolkit-public-inventory.md",
+                *(output_dir / "inventory").glob("*.md"),
+            ]
+            self.assertTrue(generated)
+            for path in generated:
+                self.assertNotIn(b"\r\n", path.read_bytes(), path.name)
 
 
 if __name__ == "__main__":

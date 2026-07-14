@@ -284,18 +284,18 @@ def main() -> int:
         shard_dir.mkdir(parents=True, exist_ok=True)
         index, shards = render_inventory_shards(version, symbols)
         index_path = output_dir / "toolkit-public-inventory.md"
-        index_path.write_text(index, encoding="utf-8")
+        index_path.write_text(index, encoding="utf-8", newline="\n")
         expected = set(shards)
         for stale in shard_dir.glob("*.md"):
             if stale.name not in expected:
                 stale.unlink()
         for name, content in shards.items():
-            (shard_dir / name).write_text(content, encoding="utf-8")
+            (shard_dir / name).write_text(content, encoding="utf-8", newline="\n")
         print(f"Wrote {index_path} and {len(shards)} domain shards")
     if args.output:
         inventory = render_inventory(version, symbols)
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(inventory, encoding="utf-8")
+        args.output.write_text(inventory, encoding="utf-8", newline="\n")
         print(f"Wrote {args.output} ({len(inventory)} characters)")
     return 0
 
