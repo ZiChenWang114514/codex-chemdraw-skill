@@ -12,6 +12,8 @@ from typing import Any
 import xml.etree.ElementTree as ET
 import zipfile
 
+import native_io
+
 
 _R_ID = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"
 _R_EMBED = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed"
@@ -349,17 +351,24 @@ def scan_office_objects(input_path: str | Path) -> tuple[str, list[dict[str, Any
 
 
 def _convert_cdx_to_cdxml(cdx_data: bytes) -> str:
-    from cdxml_toolkit.chemdraw.cdx_converter import convert_cdx_to_cdxml
+    from cdxml_toolkit.chemdraw.cdx_converter import convert_file
 
     with com_apartment():
-        return convert_cdx_to_cdxml(cdx_data, method="auto")
+        return native_io.convert_cdx_bytes_to_cdxml(cdx_data, convert_file)
 
 
 def _render_cdxml_preview(source: str, destination: str) -> None:
     from cdxml_toolkit.chemdraw.cdxml_to_image import cdxml_to_image
 
-    with com_apartment():
-        cdxml_to_image(source, destination, png_dpi=300)
+    def render(native_source: Path, native_destination: Path) -> None:
+        with com_apartment():
+            cdxml_to_image(
+                str(native_source), str(native_destination), png_dpi=300
+            )
+
+    native_io.bridge_file(
+        source, destination, render, output_kind="png"
+    )
 
 
 def _validate_cdxml_text(value: str, label: str) -> str:
@@ -529,41 +538,54 @@ def rewrite_office_package(
 def render_office_pdf(office_path: str | Path, output_path: str | Path) -> None:
     source = Path(office_path).resolve()
     destination = Path(output_path).resolve()
-    import pythoncom
-    import win32com.client
 
-    pythoncom.CoInitialize()
-    application = None
-    document = None
-    try:
-        if source.suffix.lower() == ".pptx":
-            application = win32com.client.DispatchEx("PowerPoint.Application")
-            document = application.Presentations.Open(str(source), True, False, False)
-            document.SaveAs(str(destination), 32)
-        else:
-            application = win32com.client.DispatchEx("Word.Application")
-            application.Visible = False
-            document = application.Documents.Open(str(source), False, True, False)
-            document.ExportAsFixedFormat(str(destination), 17)
-    finally:
-        if document is not None:
-            try:
-                document.Close()
-            except Exception:
-                pass
-        if application is not None:
-            try:
-                application.Quit()
-            except Exception:
-                pass
-        pythoncom.CoUninitialize()
+    def export(native_source: Path, native_destination: Path) -> None:
+        import pythoncom
+        import win32com.client
+
+        pythoncom.CoInitialize()
+        application = None
+        document = None
+        try:
+            if native_source.suffix.lower() == ".pptx":
+                application = win32com.client.DispatchEx("PowerPoint.Application")
+                document = application.Presentations.Open(
+                    str(native_source), True, False, False
+                )
+                document.SaveAs(str(native_destination), 32)
+            else:
+                application = win32com.client.DispatchEx("Word.Application")
+                application.Visible = False
+                document = application.Documents.Open(
+                    str(native_source), False, True, False
+                )
+                document.ExportAsFixedFormat(str(native_destination), 17)
+        finally:
+            if document is not None:
+                try:
+                    document.Close()
+                except Exception:
+                    pass
+            if application is not None:
+                try:
+                    application.Quit()
+                except Exception:
+                    pass
+            pythoncom.CoUninitialize()
+
+    native_io.bridge_file(
+        source,
+        destination,
+        export,
+        output_kind="pdf",
+        preserve_source_context=True,
+    )
     validate_pdf(destination)
 
 
 def validate_pdf(path: str | Path) -> None:
     pdf = Path(path).resolve()
-    if not pdf.is_file() or pdf.stat().st_size < 8:
-        raise RuntimeError(f"Office PDF preview was not created: {pdf}")
-    with pdf.open("rb") as handle:
-        if not handle.read(5).startswith(b"%PDF-"):
-            raise RuntimeError(f"Office PDF preview is invalid: {pdf}")
+    try:
+        native_io.validate_native_output(pdf, "pdf")
+    except native_io.NativeIOError as exc:
+        raise RuntimeError(f"Office PDF preview is invalid: {pdf}") from exc

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+import struct
 import tempfile
 import unittest
 from unittest import mock
@@ -27,6 +28,16 @@ MINIMAL_CDXML = """<?xml version="1.0" encoding="UTF-8"?>
 def _ole(marker: bytes) -> bytes:
     cdx = b"VjCD0100" + marker + (b"\0" * (5000 - len(marker)))
     return build_ole_compound_file(cdx)
+
+
+def _emf(marker: bytes = b"") -> bytes:
+    data = bytearray(108 + len(marker))
+    struct.pack_into("<II", data, 0, 1, 108)
+    struct.pack_into("<I", data, 40, 0x464D4520)
+    struct.pack_into("<III", data, 44, 0x00010000, len(data), 1)
+    struct.pack_into("<H", data, 56, 1)
+    data[108:] = marker
+    return bytes(data)
 
 
 def _write_dual_office(path: Path) -> None:
@@ -177,27 +188,49 @@ class OfficeInspectionTests(unittest.TestCase):
         )
 
     def test_native_conversion_initializes_and_releases_com_apartment(self):
+        def convert(native_source, native_destination, *, method):
+            self.assertEqual(method, "auto")
+            self.assertTrue(str(native_source).isascii())
+            self.assertTrue(str(native_destination).isascii())
+            Path(native_destination).write_text(MINIMAL_CDXML, encoding="utf-8")
+
         with mock.patch("pythoncom.CoInitialize") as initialize, mock.patch(
             "pythoncom.CoUninitialize"
         ) as uninitialize, mock.patch(
-            "cdxml_toolkit.chemdraw.cdx_converter.convert_cdx_to_cdxml",
-            return_value=MINIMAL_CDXML,
+            "cdxml_toolkit.chemdraw.cdx_converter.convert_file",
+            side_effect=convert,
         ):
-            result = office_objects._convert_cdx_to_cdxml(b"VjCD0100")
+            result = office_objects._convert_cdx_to_cdxml(
+                b"VjCD0100" + (b"\0" * 24)
+            )
 
         self.assertEqual(result, MINIMAL_CDXML)
         initialize.assert_called_once_with()
         uninitialize.assert_called_once_with()
 
     def test_native_preview_initializes_and_releases_com_apartment(self):
-        with mock.patch("pythoncom.CoInitialize") as initialize, mock.patch(
-            "pythoncom.CoUninitialize"
-        ) as uninitialize, mock.patch(
-            "cdxml_toolkit.chemdraw.cdxml_to_image.cdxml_to_image"
-        ) as renderer:
-            office_objects._render_cdxml_preview("source.cdxml", "preview.png")
+        from PIL import Image
 
-        renderer.assert_called_once_with("source.cdxml", "preview.png", png_dpi=300)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source = Path(temp_dir) / "source.cdxml"
+            destination = Path(temp_dir) / "preview.png"
+            source.write_text(MINIMAL_CDXML, encoding="utf-8")
+
+            def render(native_source, native_destination, *, png_dpi):
+                self.assertEqual(png_dpi, 300)
+                self.assertTrue(str(native_source).isascii())
+                self.assertTrue(str(native_destination).isascii())
+                Image.new("RGB", (4, 5), "white").save(native_destination)
+
+            with mock.patch("pythoncom.CoInitialize") as initialize, mock.patch(
+                "pythoncom.CoUninitialize"
+            ) as uninitialize, mock.patch(
+                "cdxml_toolkit.chemdraw.cdxml_to_image.cdxml_to_image",
+                side_effect=render,
+            ) as renderer:
+                office_objects._render_cdxml_preview(source, destination)
+
+        renderer.assert_called_once()
         initialize.assert_called_once_with()
         uninitialize.assert_called_once_with()
 
@@ -209,7 +242,7 @@ class OfficeReplacementTests(unittest.TestCase):
         self.replacement = self.root / "replacement.cdxml"
         self.replacement.write_text(MINIMAL_CDXML, encoding="utf-8")
         self.replacement_ole = _ole(b"REPLACEMENT")
-        self.replacement_emf = b"REPLACEMENT-EMF"
+        self.replacement_emf = _emf(b"REPLACEMENT")
 
     def tearDown(self):
         self.temp.cleanup()

@@ -8,6 +8,7 @@ import inspect
 import json
 import os
 from pathlib import Path
+import re
 import sys
 import traceback
 import uuid
@@ -94,6 +95,23 @@ def _error_envelope(exc: BaseException) -> tuple[dict, int]:
             3,
         )
     error_id = _failure_log(exc)
+    error_code = getattr(exc, "error_code", None)
+    if isinstance(error_code, str) and re.fullmatch(r"[a-z0-9_]{1,100}", error_code):
+        public_message = str(
+            getattr(exc, "public_message", None)
+            or "Native automation failed; inspect the local diagnostic log"
+        )[:1000]
+        return (
+            {
+                "ok": False,
+                "error": {
+                    "code": error_code,
+                    "message": public_message,
+                    "id": error_id,
+                },
+            },
+            1,
+        )
     return (
         {
             "ok": False,

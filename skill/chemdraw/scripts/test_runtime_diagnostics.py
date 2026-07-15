@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import socket
+import subprocess
 import tempfile
 import unittest
 from unittest import mock
@@ -10,6 +11,95 @@ import runtime_diagnostics
 
 
 class RuntimeDiagnosticsTests(unittest.TestCase):
+    def test_probe_stage_contains_secondary_timeout_during_teardown(self):
+        process = mock.Mock()
+        process.pid = 987
+        process.communicate.side_effect = [
+            subprocess.TimeoutExpired(["probe"], 1),
+            subprocess.TimeoutExpired(["probe"], 1),
+        ]
+        with mock.patch.object(
+            runtime_diagnostics, "snapshot_automation_processes", return_value={}
+        ), mock.patch.object(
+            runtime_diagnostics.subprocess, "Popen", return_value=process
+        ), mock.patch.object(
+            runtime_diagnostics, "_assign_kill_job", return_value=("job", "api", "jobapi")
+        ), mock.patch.object(
+            runtime_diagnostics, "_terminate_process_tree"
+        ) as terminate, mock.patch.object(
+            runtime_diagnostics, "_audit_stage_processes", return_value={"status": "confirmed"}
+        ):
+            result = runtime_diagnostics._run_probe_stage("native", 1)
+
+        self.assertEqual(result["error_code"], "native_probe_timeout")
+        self.assertTrue(result["timed_out"])
+        self.assertIn("deadline", terminate.call_args.kwargs)
+
+    def test_requested_probes_use_stage_specific_hard_timeouts(self):
+        stages = {
+            "native": {
+                "status": "available",
+                "png_bytes": 123,
+                "png_dimensions": [10, 11],
+                "chemscript_status": "available",
+                "cleanup": {"status": "confirmed"},
+            },
+            "pptx": {
+                "status": "available",
+                "objects": 1,
+                "cleanup": {"status": "confirmed"},
+            },
+            "docx": {
+                "status": "available",
+                "objects": 1,
+                "cleanup": {"status": "confirmed"},
+            },
+        }
+
+        with mock.patch.object(
+            runtime_diagnostics,
+            "_run_probe_stage",
+            side_effect=lambda stage, timeout: stages[stage],
+        ) as runner:
+            result = runtime_diagnostics.diagnose_runtime(
+                run_native_probe=True, run_office_probe=True
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(
+            runner.call_args_list,
+            [mock.call("native", 75), mock.call("pptx", 60), mock.call("docx", 60)],
+        )
+        self.assertEqual(result["metadata"]["probe_hard_limit_seconds"], 210)
+
+    def test_cleanup_unconfirmed_stops_later_office_probe(self):
+        native = {
+            "status": "available",
+            "chemscript_status": "available",
+            "cleanup": {"status": "confirmed"},
+        }
+        pptx = {
+            "status": "missing",
+            "detail": "probe timed out",
+            "timed_out": True,
+            "cleanup": {"status": "unconfirmed", "unknown_pids": [4321]},
+        }
+        with mock.patch.object(
+            runtime_diagnostics,
+            "_run_probe_stage",
+            side_effect=[native, pptx],
+        ) as runner:
+            result = runtime_diagnostics.diagnose_runtime(
+                run_native_probe=True, run_office_probe=True
+            )
+
+        self.assertFalse(result["ok"])
+        runner.assert_has_calls([mock.call("native", 75), mock.call("pptx", 60)])
+        self.assertEqual(runner.call_count, 2)
+        docx = result["outputs"]["capabilities"]["office_probe"]["stages"]["docx"]
+        self.assertEqual(docx["status"], "not_run")
+        self.assertEqual(docx["reason"], "cleanup_unconfirmed")
+
     def test_default_diagnostics_are_offline_read_only_and_do_not_run_probes(self):
         with tempfile.TemporaryDirectory() as temp_dir, mock.patch.object(
             runtime_diagnostics.Path, "home", return_value=Path(temp_dir)
@@ -45,17 +135,13 @@ class RuntimeDiagnosticsTests(unittest.TestCase):
             "png_bytes": 123,
             "png_dimensions": [10, 11],
             "chemscript_status": "available",
+            "cleanup": {"status": "confirmed"},
         }
-        office = {
-            "status": "available",
-            "pptx_objects": 1,
-            "docx_objects": 1,
-        }
+        pptx = {"status": "available", "objects": 1, "cleanup": {"status": "confirmed"}}
+        docx = {"status": "available", "objects": 1, "cleanup": {"status": "confirmed"}}
         with mock.patch.object(
-            runtime_diagnostics, "_native_probe", return_value=native
-        ) as native_probe, mock.patch.object(
-            runtime_diagnostics, "_office_probe", return_value=office
-        ) as office_probe:
+            runtime_diagnostics, "_run_probe_stage", side_effect=[native, pptx, docx]
+        ) as runner:
             result = runtime_diagnostics.diagnose_runtime(
                 run_native_probe=True, run_office_probe=True
             )
@@ -63,17 +149,17 @@ class RuntimeDiagnosticsTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         capabilities = result["outputs"]["capabilities"]
         self.assertEqual(capabilities["native_probe"], native)
-        self.assertEqual(capabilities["office_probe"], office)
+        self.assertEqual(capabilities["office_probe"]["pptx_objects"], 1)
+        self.assertEqual(capabilities["office_probe"]["docx_objects"], 1)
         self.assertEqual(capabilities["chemscript"]["status"], "available")
         self.assertEqual(capabilities["office"]["status"], "available")
         self.assertFalse(result["metadata"]["read_only"])
-        native_probe.assert_called_once_with()
-        office_probe.assert_called_once_with()
+        self.assertEqual(runner.call_count, 3)
 
     def test_requested_probe_failure_makes_diagnostic_unsuccessful(self):
         with mock.patch.object(
             runtime_diagnostics,
-            "_native_probe",
+            "_run_probe_stage",
             return_value={"status": "missing", "detail": "ChemDraw unavailable"},
         ):
             result = runtime_diagnostics.diagnose_runtime(run_native_probe=True)

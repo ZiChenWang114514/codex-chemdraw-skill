@@ -902,6 +902,11 @@ class HealthCheckTests(unittest.TestCase):
         self.assertNotIn("ChemDraw COM: registered (read-only check)", source)
         self.assertNotIn("$comKey", source)
 
+    def test_health_allows_bounded_full_diagnostics_to_finish(self):
+        source = HEALTH_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("$diagnosticTimeoutSeconds = 220", source)
+        self.assertIn("-TimeoutSeconds $diagnosticTimeoutSeconds", source)
+
     def test_skip_native_chemdraw_warns_and_omits_chemscript_ping(self):
         source = HEALTH_SCRIPT.read_text(encoding="utf-8")
         self.assertIn("[switch]$SkipNativeChemDraw", source)

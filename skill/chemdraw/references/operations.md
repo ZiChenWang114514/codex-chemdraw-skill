@@ -23,7 +23,7 @@ Run `scripts/runtime_discovery.py` from Python when debugging discovery code. Ge
 
 ## Health And Smoke Tests
 
-Run MCP `diagnose_runtime()` for an offline, read-only capability matrix. It reports the Python runtime, installed `cdxml-toolkit` distribution version, ChemDraw discovery and COM registration, ChemScript, Java/OPSIN, Office dependencies, DECIMER markers, and live tool count without importing DECIMER or downloading weights. Set `run_native_probe=true` for a temporary CDXML-to-PNG and ChemScript probe; set `run_office_probe=true` for temporary PPTX/DOCX ChemDraw OLE probes.
+Run MCP `diagnose_runtime()` for an offline, read-only capability matrix. It reports the Python runtime, installed `cdxml-toolkit` distribution version, ChemDraw discovery and COM registration, ChemScript, Java/OPSIN, Office dependencies, DECIMER markers, and live tool count without importing DECIMER or downloading weights. Set `run_native_probe=true` for a temporary CDXML-to-PNG and ChemScript probe; set `run_office_probe=true` for separate temporary PPTX and DOCX ChemDraw OLE probes. Native rendering is capped at 75 seconds and each Office stage at 60 seconds. Results include stage duration, timeout, and cleanup status. Normal completion never force-terminates ChemDraw; timeout cleanup is limited to newly observed automation processes that can be attributed to the probe.
 
 Run `scripts/health_check.ps1` for the complete repository gate. It consumes the same diagnostic matrix, checks Python packages, generated signatures and inventory, Skill tests, Codex MCP state, and, unless skipped, the native and Office probes. Every subprocess is time-bounded.
 
@@ -47,6 +47,7 @@ Read [decimer-api.md](decimer-api.md) for the HTTP contract.
 - Native resource busy: ChemDraw COM operations share a named per-user mutex. Let the active render, conversion, or Office operation finish before retrying; ordinary parsing remains concurrent.
 - Worker error id: inspect `%LOCALAPPDATA%\Codex\chemdraw-mcp\logs\worker-<id>.log`; detailed exceptions are intentionally not returned over MCP.
 - COM failure: close visible ChemDraw documents, verify registration, and run the smoke test.
+- Native path failure: the Skill copies inputs into an ASCII-only workspace before ChemDraw or Office COM calls, validates native output there, and publishes it transactionally to the requested path. `CHEMDRAW_NATIVE_TEMP` can select an explicit writable ASCII root. `native_ascii_workspace_unavailable`, `native_saveas_silent_failure`, `native_output_missing`, and `native_output_invalid` identify failures before publication.
 - License or activation window: stop validation. With both 32-bit and 64-bit ChemDraw installed, verify which registry view and Python bitness selected `/Automation`; do not alter an activated interactive installation as a shortcut.
 - ChemScript failure: inspect the bridge health output; do not call the private server protocol.
 - Config drift: run the config script without `-Apply`, review its proposed block, then apply with automatic backup. Failed writes restore only when the config fingerprint still matches the last known state; concurrent edits are preserved.

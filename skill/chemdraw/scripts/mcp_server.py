@@ -19,6 +19,7 @@ import typing
 from cdxml_toolkit.mcp_server import server as upstream
 from mcp.server.fastmcp import FastMCP
 
+from process_control import _assign_kill_job, _close_job, _terminate_process_tree
 from tool_registry import build_registry
 
 
@@ -70,78 +71,6 @@ def _worker_environment() -> dict[str, str]:
     }
     environment["PYTHONIOENCODING"] = "utf-8"
     return environment
-
-
-def _assign_kill_job(process: subprocess.Popen) -> tuple[typing.Any, typing.Any] | None:
-    if os.name != "nt" or not isinstance(getattr(process, "_handle", None), int):
-        return None
-    try:
-        import win32api
-        import win32job
-
-        job = win32job.CreateJobObject(None, "")
-        information = win32job.QueryInformationJobObject(
-            job, win32job.JobObjectExtendedLimitInformation
-        )
-        information["BasicLimitInformation"]["LimitFlags"] |= (
-            win32job.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
-        )
-        win32job.SetInformationJobObject(
-            job, win32job.JobObjectExtendedLimitInformation, information
-        )
-        win32job.AssignProcessToJobObject(job, int(process._handle))
-        return job, win32api
-    except Exception:
-        try:
-            if "job" in locals():
-                win32api.CloseHandle(job)
-        except Exception:
-            pass
-        return None
-
-
-def _close_job(job: tuple[typing.Any, typing.Any] | None) -> None:
-    if not job:
-        return
-    handle, win32api = job
-    try:
-        win32api.CloseHandle(handle)
-    except Exception:
-        pass
-
-
-def _terminate_process_tree(
-    process: subprocess.Popen,
-    job: tuple[typing.Any, typing.Any] | None = None,
-) -> None:
-    _close_job(job)
-    if process.poll() is not None:
-        return
-    pid = getattr(process, "pid", None)
-    if os.name == "nt" and isinstance(pid, int):
-        system_root = os.environ.get("SystemRoot") or os.environ.get("WINDIR")
-        taskkill = Path(system_root) / "System32" / "taskkill.exe" if system_root else None
-        try:
-            if taskkill and taskkill.is_file():
-                subprocess.run(
-                    [str(taskkill), "/PID", str(pid), "/T", "/F"],
-                    stdin=subprocess.DEVNULL,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    timeout=10,
-                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                    check=False,
-                )
-        except Exception:
-            pass
-    try:
-        process.kill()
-    except Exception:
-        pass
-    try:
-        process.wait(timeout=5)
-    except Exception:
-        pass
 
 
 def _monitor_process(

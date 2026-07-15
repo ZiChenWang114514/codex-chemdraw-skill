@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import inspect
+import os
 from pathlib import Path
 import tempfile
 from typing import Any, Optional, Union
 
 import artifact_safety
+import native_io
 
 
 _TEMP_OUTPUT = Path(tempfile.gettempdir()) / "codex-chemdraw"
@@ -133,17 +135,62 @@ def parse_reaction(
     if anchor is None and input_dir:
         anchor = Path(input_dir) / "reaction"
     destination = _destination(anchor, output_path, tag="parsed", suffix=".json")
-    return _run_file_tool(
-        destination,
-        lambda staged: upstream(
+    def invoke(staged: Path):
+        if input_dir:
+            with native_io.ascii_input_directory(input_dir) as staged_directory:
+                native_dir, replacements = staged_directory
+                if cdx:
+                    with native_io.ascii_inputs([cdx]) as native_paths:
+                        replacements[os.path.normcase(str(native_paths[0]))] = str(
+                            Path(cdx).expanduser().resolve()
+                        )
+                        result = upstream(
+                            cdxml=cdxml,
+                            cdx=str(native_paths[0]),
+                            csv=csv,
+                            rxn=rxn,
+                            input_dir=str(native_dir),
+                            output_path=str(staged),
+                        )
+                        native_io.rewrite_json_paths(staged, replacements)
+                        return result
+                result = upstream(
+                    cdxml=cdxml,
+                    cdx=cdx,
+                    csv=csv,
+                    rxn=rxn,
+                    input_dir=str(native_dir),
+                    output_path=str(staged),
+                )
+                native_io.rewrite_json_paths(staged, replacements)
+                return result
+        if cdx:
+            with native_io.ascii_inputs([cdx]) as native_paths:
+                result = upstream(
+                    cdxml=cdxml,
+                    cdx=str(native_paths[0]),
+                    csv=csv,
+                    rxn=rxn,
+                    output_path=str(staged),
+                )
+                native_io.rewrite_json_paths(
+                    staged,
+                    {
+                        os.path.normcase(str(native_paths[0])): str(
+                            Path(cdx).expanduser().resolve()
+                        )
+                    },
+                )
+                return result
+        return upstream(
             cdxml=cdxml,
             cdx=cdx,
             csv=csv,
             rxn=rxn,
-            input_dir=input_dir,
             output_path=str(staged),
-        ),
-    )
+        )
+
+    return _run_file_tool(destination, invoke)
 
 
 def parse_scheme(cdxml_path: str, output_path: Optional[str] = None) -> dict:
@@ -179,7 +226,14 @@ def convert_cdx_cdxml(
     destination = _destination(source, output_path, tag="converted", suffix=suffix)
     return _run_file_tool(
         destination,
-        lambda staged: upstream(str(source), output_path=str(staged)),
+        lambda staged: native_io.bridge_file(
+            source,
+            staged,
+            lambda native_source, native_destination: upstream(
+                str(native_source), output_path=str(native_destination)
+            ),
+            output_kind=suffix.lstrip("."),
+        ),
     )
 
 
@@ -293,7 +347,7 @@ def _build_embedded_office(source: Path, destination: Path) -> dict[str, Any]:
     )
     from extended_tools import _build_chemdraw_ole
 
-    converted = batch_convert([str(source)])
+    converted = native_io.batch_convert_cdxml([source], batch_convert)
     if len(converted) != 1 or not isinstance(converted[0], dict):
         return {"ok": False, "error": "ChemDraw COM conversion returned no output"}
     item = converted[0]
@@ -386,7 +440,14 @@ def render_to_png(
     destination = _destination(source, output_path, tag="rendered", suffix=".png")
     return _run_file_tool(
         destination,
-        lambda staged: upstream(str(source), output_path=str(staged)),
+        lambda staged: native_io.bridge_file(
+            source,
+            staged,
+            lambda native_source, native_destination: upstream(
+                str(native_source), output_path=str(native_destination)
+            ),
+            output_kind="png",
+        ),
     )
 
 

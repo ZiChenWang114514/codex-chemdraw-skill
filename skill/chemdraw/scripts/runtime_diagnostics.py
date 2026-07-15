@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import redirect_stdout
 import importlib.metadata
 import importlib.util
 import json
@@ -12,7 +13,21 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from typing import Any
+
+from process_control import (
+    _assign_kill_job,
+    _close_job,
+    _terminate_process_tree,
+    cleanup_automation_processes,
+    snapshot_automation_processes,
+)
+
+
+NATIVE_PROBE_TIMEOUT_SECONDS = 75
+OFFICE_PROBE_TIMEOUT_SECONDS = 60
+PROBE_HARD_LIMIT_SECONDS = 210
 
 
 def _status(available: bool, **details: Any) -> dict[str, Any]:
@@ -171,7 +186,7 @@ def _native_probe() -> dict[str, Any]:
         }
 
 
-def _office_probe() -> dict[str, Any]:
+def _office_probe(suffix: str | None = None) -> dict[str, Any]:
     from cdxml_toolkit.naming.mol_builder import resolve_compound
 
     import official_overrides
@@ -185,19 +200,28 @@ def _office_probe() -> dict[str, Any]:
         )
         if not isinstance(drawn, dict) or not drawn.get("ok"):
             raise RuntimeError(f"Office source drawing failed: {drawn}")
+        suffixes = (suffix,) if suffix else (".pptx", ".docx")
         details = {}
-        for suffix in (".pptx", ".docx"):
-            office = root / f"probe{suffix}"
+        for current_suffix in suffixes:
+            office = root / f"probe{current_suffix}"
             result = official_overrides.embed_cdxml_in_office(
                 str(cdxml), str(office)
             )
             if not isinstance(result, dict) or not result.get("ok"):
-                raise RuntimeError(f"{suffix} OLE probe failed: {result}")
+                raise RuntimeError(f"{current_suffix} OLE probe failed: {result}")
             validation = _validate_office_package(office, expected_ole_objects=1)
-            details[suffix.lstrip(".")] = {
+            details[current_suffix.lstrip(".")] = {
                 "bytes": office.stat().st_size,
                 "ole_objects": validation["ole_objects"],
                 "chemdraw_objects": validation["chemdraw_objects"],
+            }
+        if suffix:
+            key = suffix.lstrip(".")
+            return {
+                "status": "available",
+                "format": key,
+                "bytes": details[key]["bytes"],
+                "objects": details[key]["chemdraw_objects"],
             }
         return {
             "status": "available",
@@ -212,6 +236,172 @@ def _run_probe(probe) -> dict[str, Any]:
         return probe()
     except Exception as exc:
         return {"status": "missing", "detail": str(exc)}
+
+
+def _probe_stage(stage: str) -> dict[str, Any]:
+    if stage == "native":
+        return _run_probe(_native_probe)
+    if stage == "pptx":
+        return _run_probe(lambda: _office_probe(".pptx"))
+    if stage == "docx":
+        return _run_probe(lambda: _office_probe(".docx"))
+    return {"status": "missing", "detail": f"Unknown probe stage: {stage}"}
+
+
+def _audit_stage_processes(
+    before: dict[int, dict[str, Any]],
+    *,
+    stage_pid: int,
+    timed_out: bool,
+    deadline: float,
+) -> dict[str, Any]:
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return {
+                "status": "unconfirmed",
+                "terminated_pids": [],
+                "lingering_pids": [],
+                "unknown_pids": [],
+                "failed_pids": [],
+                "detail": "Automation cleanup audit exceeded the stage deadline",
+            }
+        after = snapshot_automation_processes(timeout_seconds=min(5.0, remaining))
+        new_pids = set(after) - set(before)
+        if not new_pids:
+            return {
+                "status": "confirmed",
+                "terminated_pids": [],
+                "lingering_pids": [],
+                "unknown_pids": [],
+                "failed_pids": [],
+            }
+        if timed_out or time.monotonic() >= deadline:
+            return cleanup_automation_processes(
+                before,
+                after,
+                stage_pid=stage_pid,
+                terminate=timed_out,
+                deadline=deadline,
+            )
+        time.sleep(min(0.5, max(0.0, deadline - time.monotonic())))
+
+
+def _run_probe_stage(stage: str, timeout_seconds: int) -> dict[str, Any]:
+    started = time.monotonic()
+    stage_deadline = started + timeout_seconds
+    try:
+        before = snapshot_automation_processes(
+            timeout_seconds=min(5.0, max(0.1, stage_deadline - time.monotonic()))
+        )
+    except Exception as exc:
+        return {
+            "status": "missing",
+            "stage": stage,
+            "detail": f"Automation process baseline failed: {exc}",
+            "cleanup": {"status": "unconfirmed", "unknown_pids": []},
+            "duration_seconds": round(time.monotonic() - started, 3),
+        }
+
+    process = subprocess.Popen(
+        [sys.executable, str(Path(__file__).resolve()), "--probe-stage", stage],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=os.environ.copy(),
+        creationflags=(
+            getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        ),
+    )
+    job = _assign_kill_job(process)
+    timed_out = False
+    stdout = ""
+    stderr = ""
+    job_released = True
+    cleanup_reserve = min(5.0, max(0.25, timeout_seconds * 0.1))
+    execution_deadline = stage_deadline - cleanup_reserve
+    try:
+        try:
+            stdout, stderr = process.communicate(
+                timeout=max(0.05, execution_deadline - time.monotonic())
+            )
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            _terminate_process_tree(process, job, deadline=stage_deadline)
+            job = None
+            remaining = stage_deadline - time.monotonic()
+            if remaining > 0:
+                try:
+                    stdout, stderr = process.communicate(timeout=remaining)
+                except subprocess.TimeoutExpired:
+                    stdout = ""
+                    stderr = "Probe subprocess did not exit before the stage deadline"
+    finally:
+        job_released = _close_job(job)
+
+    try:
+        cleanup = _audit_stage_processes(
+            before,
+            stage_pid=process.pid,
+            timed_out=timed_out,
+            deadline=(
+                time.monotonic()
+                if timed_out
+                else min(stage_deadline, time.monotonic() + 15)
+            ),
+        )
+    except Exception as exc:
+        cleanup = {
+            "status": "unconfirmed",
+            "unknown_pids": [],
+            "detail": f"Automation process cleanup audit failed: {exc}",
+        }
+    if not job_released:
+        cleanup = {
+            "status": "unconfirmed",
+            "unknown_pids": cleanup.get("unknown_pids", []),
+            "detail": "Job Object kill-on-close could not be safely disarmed",
+        }
+
+    duration = round(time.monotonic() - started, 3)
+    if timed_out:
+        result: dict[str, Any] = {
+            "status": "missing",
+            "stage": stage,
+            "detail": f"{stage} probe exceeded {timeout_seconds} seconds",
+            "error_code": "native_probe_timeout",
+            "timed_out": True,
+        }
+    else:
+        try:
+            decoded = json.loads(stdout)
+            result = decoded if isinstance(decoded, dict) else {}
+        except json.JSONDecodeError:
+            result = {
+                "status": "missing",
+                "detail": "Probe subprocess returned invalid JSON",
+            }
+        if not result:
+            result = {
+                "status": "missing",
+                "detail": (stderr or "Probe subprocess returned no result")[:1000],
+            }
+        result["stage"] = stage
+    result["duration_seconds"] = duration
+    result["timeout_seconds"] = timeout_seconds
+    result["cleanup"] = cleanup
+    if cleanup.get("status") != "confirmed" and result.get("status") == "available":
+        result["status"] = "missing"
+        result["detail"] = "Probe completed but automation cleanup was unconfirmed"
+    return result
+
+
+def _not_run_stage(stage: str, reason: str) -> dict[str, Any]:
+    return {"status": "not_run", "stage": stage, "reason": reason}
 
 
 def diagnose_runtime(
@@ -252,9 +442,13 @@ def diagnose_runtime(
         capabilities["tool_registry"] = _status(False, detail=str(exc), count=0)
 
     requested = []
+    cleanup_confirmed = True
     if run_native_probe:
-        capabilities["native_probe"] = _run_probe(_native_probe)
+        capabilities["native_probe"] = _run_probe_stage(
+            "native", NATIVE_PROBE_TIMEOUT_SECONDS
+        )
         native = capabilities["native_probe"]
+        cleanup_confirmed = native.get("cleanup", {}).get("status") == "confirmed"
         if native.get("chemscript_status") == "available":
             capabilities["chemscript"] = _status(
                 True, detail=native.get("chemscript_detail") or "Bridge ping succeeded"
@@ -265,8 +459,26 @@ def diagnose_runtime(
             )
         requested.append("native_probe")
     if run_office_probe:
-        capabilities["office_probe"] = _run_probe(_office_probe)
-        if capabilities["office_probe"]["status"] == "available":
+        if cleanup_confirmed:
+            pptx = _run_probe_stage("pptx", OFFICE_PROBE_TIMEOUT_SECONDS)
+        else:
+            pptx = _not_run_stage("pptx", "cleanup_unconfirmed")
+        if pptx.get("cleanup", {}).get("status") == "unconfirmed":
+            docx = _not_run_stage("docx", "cleanup_unconfirmed")
+        elif pptx.get("status") == "not_run":
+            docx = _not_run_stage("docx", "cleanup_unconfirmed")
+        else:
+            docx = _run_probe_stage("docx", OFFICE_PROBE_TIMEOUT_SECONDS)
+        office_available = all(
+            stage.get("status") == "available" for stage in (pptx, docx)
+        )
+        capabilities["office_probe"] = {
+            "status": "available" if office_available else "missing",
+            "pptx_objects": pptx.get("objects", 0),
+            "docx_objects": docx.get("objects", 0),
+            "stages": {"pptx": pptx, "docx": docx},
+        }
+        if office_available:
             capabilities["office"] = _status(
                 True, detail="Temporary PPTX and DOCX OLE probes succeeded"
             )
@@ -288,6 +500,7 @@ def diagnose_runtime(
             "read_only": not (run_native_probe or run_office_probe),
             "network_used": False,
             "tool_count": tool_count,
+            "probe_hard_limit_seconds": PROBE_HARD_LIMIT_SECONDS,
         },
     }
 
@@ -296,8 +509,14 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--native-probe", action="store_true")
     parser.add_argument("--office-probe", action="store_true")
+    parser.add_argument("--probe-stage", choices=("native", "pptx", "docx"))
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
+    if args.probe_stage:
+        with redirect_stdout(sys.stderr):
+            result = _probe_stage(args.probe_stage)
+        print(json.dumps(result, separators=(",", ":")))
+        return 0 if result.get("status") == "available" else 1
     result = diagnose_runtime(args.native_probe, args.office_probe)
     if args.json:
         print(json.dumps(result, indent=2))

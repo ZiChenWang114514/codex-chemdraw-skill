@@ -165,11 +165,12 @@ function Invoke-BoundedNative {
 function Add-CommandFailure {
     param(
         [object]$Result,
-        [string]$Description
+        [string]$Description,
+        [int]$TimeoutSeconds = $CommandTimeoutSeconds
     )
 
     if ($Result.TimedOut) {
-        $failures.Add("$Description timed out after $CommandTimeoutSeconds seconds")
+        $failures.Add("$Description timed out after $TimeoutSeconds seconds")
         return
     }
     if ($Result.LaunchError) {
@@ -285,10 +286,13 @@ if ($discovery) {
     if (-not $SkipNativeChemDraw) {
         $diagnosticArguments += @('--native-probe', '--office-probe')
     }
+    $diagnosticTimeoutSeconds = 220
     $diagnosticResult = Invoke-BoundedNative `
         -FilePath $pythonPath `
-        -Arguments $diagnosticArguments
-    Add-CommandFailure $diagnosticResult 'Runtime capability diagnostics'
+        -Arguments $diagnosticArguments `
+        -TimeoutSeconds $diagnosticTimeoutSeconds
+    Add-CommandFailure $diagnosticResult 'Runtime capability diagnostics' `
+        -TimeoutSeconds $diagnosticTimeoutSeconds
     if ($diagnosticResult.StdOut.Trim()) {
         try {
             $diagnostics = $diagnosticResult.StdOut | ConvertFrom-Json

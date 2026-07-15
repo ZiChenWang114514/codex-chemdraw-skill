@@ -13,6 +13,8 @@ import unittest
 from unittest import mock
 
 import mcp_server
+import native_io
+import process_control
 import resource_lock
 import tool_worker
 
@@ -36,6 +38,21 @@ def write_valid_office(path: str | Path) -> None:
 
 
 class WorkerRuntimeTests(unittest.TestCase):
+    def test_worker_preserves_structured_native_error_code_and_error_id(self):
+        error = native_io.NativeIOError(
+            "native_saveas_silent_failure",
+            "Native automation returned without creating its output",
+        )
+        with mock.patch.object(tool_worker, "_failure_log", return_value="abc123"):
+            envelope, return_code = tool_worker._error_envelope(error)
+
+        self.assertEqual(return_code, 1)
+        self.assertEqual(
+            envelope["error"]["code"], "native_saveas_silent_failure"
+        )
+        self.assertEqual(envelope["error"]["id"], "abc123")
+        self.assertLessEqual(len(envelope["error"]["message"]), 1000)
+
     def test_worker_environment_preserves_runtime_configuration_and_filters_secrets(self):
         configured = {
             "CHEMSCRIPT_DLL_DIR": r"C:\ChemScript\bin",
@@ -153,7 +170,8 @@ class WorkerRuntimeTests(unittest.TestCase):
     def test_taskkill_uses_absolute_system_path(self):
         process = mock.Mock(pid=1234)
         process.poll.return_value = None
-        with mock.patch("mcp_server.subprocess.run") as run:
+        with mock.patch("process_control.subprocess.run") as run:
+            run.return_value.returncode = 0
             mcp_server._terminate_process_tree(process)
         taskkill = Path(run.call_args.args[0][0])
         expected = Path(os.environ["SystemRoot"]) / "System32" / "taskkill.exe"

@@ -53,6 +53,16 @@ def write_png(path: str | Path, width: int = 2, height: int = 3) -> None:
     Image.new("RGB", (width, height), "white").save(path, format="PNG")
 
 
+def valid_emf(marker: bytes = b"") -> bytes:
+    data = bytearray(108 + len(marker))
+    struct.pack_into("<II", data, 0, 1, 108)
+    struct.pack_into("<I", data, 40, 0x464D4520)
+    struct.pack_into("<III", data, 44, 0x00010000, len(data), 1)
+    struct.pack_into("<H", data, 56, 1)
+    data[108:] = marker
+    return bytes(data)
+
+
 def valid_chemdraw_ole() -> bytes:
     return build_fixture_ole(b"VjCD0100" + (b"\0" * 5000))
 
@@ -846,7 +856,7 @@ class ExtendedToolContractTests(unittest.TestCase):
                 "path": str(self.source.resolve()),
                 "name": "scheme",
                 "cdx_data": b"",
-                "emf_data": b"emf",
+                "emf_data": valid_emf(),
             }
         ]
         module, members = self._batch_module(converted)
@@ -884,7 +894,7 @@ class ExtendedToolContractTests(unittest.TestCase):
                 "path": str(self.source.resolve()),
                 "name": "scheme",
                 "cdx_data": b"VjCD0100" + (b"\0" * 120),
-                "emf_data": b"emf",
+                "emf_data": valid_emf(),
             }
         ]
         module, members = self._batch_module(converted, ole_data=b"not OLE")
@@ -903,7 +913,7 @@ class ExtendedToolContractTests(unittest.TestCase):
                 "path": str(self.source.resolve()),
                 "name": "scheme",
                 "cdx_data": b"VjCD0100" + (b"\0" * 120),
-                "emf_data": b"emf",
+                "emf_data": valid_emf(),
             }
         ]
 
@@ -928,7 +938,7 @@ class ExtendedToolContractTests(unittest.TestCase):
                 "path": str(self.source.resolve()),
                 "name": "scheme",
                 "cdx_data": b"VjCD0100" + (b"\0" * 120),
-                "emf_data": b"emf",
+                "emf_data": valid_emf(),
             }
         ]
         module, _ = self._batch_module(converted)

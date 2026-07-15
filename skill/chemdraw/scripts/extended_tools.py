@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import posixpath
+import shutil
 import struct
 import tempfile
 from typing import Any, Optional
@@ -16,6 +17,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 import artifact_safety
+import native_io
 from runtime_diagnostics import diagnose_runtime
 
 
@@ -364,7 +366,14 @@ def _run_cleanup(source: str, destination: str, approach: str) -> Any:
 def _render_cdxml(source: str, destination: str, dpi: int = 300) -> str:
     from cdxml_toolkit.chemdraw.cdxml_to_image import cdxml_to_image
 
-    return cdxml_to_image(source, destination, png_dpi=dpi)
+    return native_io.bridge_file(
+        source,
+        destination,
+        lambda native_source, native_destination: cdxml_to_image(
+            str(native_source), str(native_destination), png_dpi=dpi
+        ),
+        output_kind=Path(destination).suffix.lstrip("."),
+    )
 
 
 def _staged_cdxml_outputs(destination: Path, render_preview: bool, writer) -> dict[str, str]:
@@ -692,18 +701,32 @@ def fill_office_template(
     stdout, stderr = io.StringIO(), io.StringIO()
     with tempfile.TemporaryDirectory(prefix=".fill-", dir=destination.parent) as stage_dir:
         temporary = Path(stage_dir) / destination.name
-        try:
-            with redirect_stdout(stdout), redirect_stderr(stderr):
-                exit_code = main([
-                    "--template", str(template), "--manifest", str(manifest),
-                    "--output", str(temporary), "--json",
-                ])
-        except SystemExit as exc:
-            raise RuntimeError(
-                f"Template filling exited unexpectedly with code {exc.code}"
-            ) from exc
-        if exit_code:
-            raise RuntimeError(stderr.getvalue().strip() or "Template filling failed")
+        with native_io.ascii_workspace(prefix="cdx-fill-") as native_stage:
+            native_template = native_stage / f"template{template.suffix.lower()}"
+            native_output = native_stage / f"output{destination.suffix.lower()}"
+            shutil.copy2(template, native_template)
+            native_manifest, _ = native_io.write_shadow_manifest(
+                manifest, native_stage
+            )
+            try:
+                with redirect_stdout(stdout), redirect_stderr(stderr):
+                    exit_code = main([
+                        "--template", str(native_template),
+                        "--manifest", str(native_manifest),
+                        "--output", str(native_output), "--json",
+                    ])
+            except SystemExit as exc:
+                raise RuntimeError(
+                    f"Template filling exited unexpectedly with code {exc.code}"
+                ) from exc
+            if exit_code:
+                raise RuntimeError(stderr.getvalue().strip() or "Template filling failed")
+            if not native_output.is_file():
+                raise native_io.NativeIOError(
+                    "native_saveas_silent_failure",
+                    "Template filling returned without creating its output",
+                )
+            shutil.copy2(native_output, temporary)
         try:
             details = json.loads(stdout.getvalue())
         except json.JSONDecodeError as exc:
@@ -760,7 +783,7 @@ def batch_embed_cdxml_in_office(
         get_cdxml_content_size,
     )
 
-    converted = batch_convert([str(path) for path in sources])
+    converted = native_io.batch_convert_cdxml(sources, batch_convert)
     if len(converted) != len(sources):
         raise RuntimeError("ChemDraw did not convert every CDXML input")
     items = []
@@ -895,8 +918,8 @@ def replace_chemdraw_objects_in_office(
     from cdxml_toolkit.office.ole_embedder import batch_convert
 
     with office_objects.com_apartment():
-        converted = batch_convert(
-            [str(item["replacement_cdxml"]) for item in replacements]
+        converted = native_io.batch_convert_cdxml(
+            [item["replacement_cdxml"] for item in replacements], batch_convert
         )
     if len(converted) != len(replacements):
         raise RuntimeError("ChemDraw did not convert every replacement CDXML")
