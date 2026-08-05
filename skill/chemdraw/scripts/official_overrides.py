@@ -10,8 +10,12 @@ import tempfile
 from typing import Any, Optional, Union
 
 import artifact_safety
+import mcp_compat
 import native_io
 import native_renderer
+
+
+mcp_compat.install_legacy_fastmcp_alias()
 
 
 _TEMP_OUTPUT = Path(tempfile.gettempdir()) / "codex-chemdraw"

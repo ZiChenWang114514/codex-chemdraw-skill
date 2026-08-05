@@ -23,7 +23,7 @@ Run `scripts/runtime_discovery.py` from Python when debugging discovery code. Ge
 
 ## Health And Smoke Tests
 
-Run MCP `diagnose_runtime()` for an offline, read-only capability matrix. It reports the Python runtime, installed `cdxml-toolkit` distribution version, ChemDraw discovery and COM registration, ChemScript, Java/OPSIN, Office dependencies, DECIMER markers, and live tool count without importing DECIMER or downloading weights. Set `run_native_probe=true` for a temporary CDXML-to-PNG and ChemScript probe; set `run_office_probe=true` for separate temporary PPTX and DOCX ChemDraw OLE probes. Native rendering is capped at 75 seconds and each Office stage at 60 seconds. Results include stage duration, timeout, and cleanup status. Normal completion never force-terminates ChemDraw; timeout cleanup is limited to newly observed automation processes that can be attributed to the probe.
+Run MCP `diagnose_runtime()` for an offline, read-only capability matrix. It reports the Python runtime, installed `cdxml-toolkit` and MCP SDK distribution versions, ChemDraw discovery and COM registration, ChemScript, Java/OPSIN, Office dependencies, DECIMER markers, and live tool count without importing DECIMER or downloading weights. Set `run_native_probe=true` for a temporary CDXML-to-PNG and ChemScript probe; set `run_office_probe=true` for separate temporary PPTX and DOCX ChemDraw OLE probes. Native rendering is capped at 75 seconds and each Office stage at 60 seconds. Results include stage duration, timeout, and cleanup status. Normal completion never force-terminates ChemDraw; timeout cleanup is limited to newly observed automation processes that can be attributed to the probe.
 
 Run `scripts/health_check.ps1` for the complete repository gate. It consumes the same diagnostic matrix, checks Python packages, generated signatures and inventory, Skill tests, Codex MCP state, and, unless skipped, the native and Office probes. Every subprocess is time-bounded.
 
@@ -43,6 +43,7 @@ Read [decimer-api.md](decimer-api.md) for the HTTP contract.
 ## Failure Modes
 
 - MCP startup timeout: verify discovered Python and import `mcp_server.py` directly.
+- MCP SDK mismatch: use `mcp==2.0.0` for the tested runtime. The launcher also supports SDK 1.x and provides the renamed high-level server class expected by `cdxml-toolkit==0.5.17`.
 - Tool timeout: raise the worker timeout only after confirming the operation is legitimately long-running.
 - Molecular analysis timeout: `modify_molecule` is limited to 90 seconds because ChemScript naming and decomposition can become expensive for complex fused structures. Trusted SMILES can be drawn directly when no modification is requested.
 - Native resource busy: ChemDraw COM operations share a named per-user mutex. Let the active render, conversion, or Office operation finish before retrying; ordinary parsing remains concurrent.

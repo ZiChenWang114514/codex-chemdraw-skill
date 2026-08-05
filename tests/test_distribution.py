@@ -123,7 +123,17 @@ class DistributionTests(unittest.TestCase):
         self.assertIn("full-portable-tests:", workflow)
         self.assertIn('python-version: "3.12"', workflow)
         self.assertIn('cdxml-toolkit==0.5.17', workflow)
+        self.assertIn('mcp==2.0.0', workflow)
         self.assertIn('unittest discover -s skill/chemdraw/scripts', workflow)
+
+    def test_removed_fastmcp_import_is_isolated_to_compatibility_module(self) -> None:
+        matches = []
+        for path in (ROOT / "skill" / "chemdraw" / "scripts").glob("*.py"):
+            if path.name == "mcp_compat.py" or path.name.startswith("test_"):
+                continue
+            if "mcp.server.fastmcp" in path.read_text(encoding="utf-8"):
+                matches.append(path.name)
+        self.assertEqual(matches, [])
 
 
 if __name__ == "__main__":

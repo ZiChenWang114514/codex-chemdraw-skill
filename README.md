@@ -21,6 +21,7 @@ This is an independent community project. It is not affiliated with or endorsed 
 - A licensed, activated ChemDraw installation for native rendering and automation.
 - Python 3.10 or later; Python 3.12 is the tested configuration.
 - `cdxml-toolkit==0.5.17` for the tested configuration.
+- `mcp==2.0.0` for the tested MCP runtime; SDK 1.x remains compatible.
 - Codex CLI or Codex desktop for Skill and MCP integration.
 
 ChemDraw, Microsoft Office, and local DECIMER model weights are not bundled.
@@ -32,7 +33,7 @@ git clone https://github.com/ZiChenWang114514/codex-chemdraw-skill.git
 Set-Location codex-chemdraw-skill
 
 conda create -n cdxml python=3.12 -y
-conda run -n cdxml python -m pip install "cdxml-toolkit==0.5.17"
+conda run -n cdxml python -m pip install "mcp==2.0.0" "cdxml-toolkit==0.5.17"
 $python = (conda run -n cdxml python -c "import sys; print(sys.executable)" | Select-Object -Last 1)
 Set-ExecutionPolicy -Scope Process Bypass
 & .\scripts\install.ps1 -Python $python -Apply -ConfigureMcp

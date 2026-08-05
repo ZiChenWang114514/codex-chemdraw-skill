@@ -16,8 +16,11 @@ import threading
 import time
 import typing
 
+import mcp_compat
+
+mcp_compat.install_legacy_fastmcp_alias()
+
 from cdxml_toolkit.mcp_server import server as upstream
-from mcp.server.fastmcp import FastMCP
 
 from process_control import _assign_kill_job, _close_job, _terminate_process_tree
 from tool_registry import build_registry
@@ -368,8 +371,9 @@ def _adapt_tool(
     return invoke
 
 
-def build_server() -> FastMCP:
-    mcp = FastMCP("cdxml-toolkit", instructions=upstream.mcp.instructions)
+def build_server():
+    server_type = mcp_compat.server_class()
+    mcp = server_type("cdxml-toolkit", instructions=upstream.mcp.instructions)
     for spec in build_registry().values():
         mcp.tool(
             name=spec.name,

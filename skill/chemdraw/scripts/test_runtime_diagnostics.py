@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.metadata
 from pathlib import Path
 import socket
 import subprocess
@@ -118,6 +119,10 @@ class RuntimeDiagnosticsTests(unittest.TestCase):
         self.assertEqual(
             result["outputs"]["capabilities"]["cdxml_toolkit"]["version"],
             "0.5.17",
+        )
+        self.assertEqual(
+            result["outputs"]["capabilities"]["mcp_sdk"]["version"],
+            importlib.metadata.version("mcp"),
         )
         self.assertEqual(result["metadata"]["tool_count"], 30)
         self.assertEqual(

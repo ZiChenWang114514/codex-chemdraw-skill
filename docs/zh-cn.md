@@ -2,7 +2,7 @@
 
 [English](../README.md)
 
-这是一个面向 Windows 的 Codex Skill 与 MCP 服务，用于调用 ChemDraw 和 `cdxml-toolkit` 完成结构绘制、反应式处理、格式转换、图片识别、Office 嵌入和部分实验数据工作流。
+这是一个面向 Windows 的 Codex Skill 与 MCP 服务，用于调用 ChemDraw 和 `cdxml-toolkit` 完成结构绘制、反应式处理、格式转换、图片识别、Office 嵌入和部分实验数据工作流。测试环境使用 MCP Python SDK 2.0.0，同时兼容现有的 SDK 1.x 环境。
 
 本项目是独立社区项目，与 Revvity、OpenAI、Anthropic 或 DECIMER 项目没有隶属或背书关系。
 
@@ -30,7 +30,7 @@ git clone https://github.com/ZiChenWang114514/codex-chemdraw-skill.git
 Set-Location codex-chemdraw-skill
 
 conda create -n cdxml python=3.12 -y
-conda run -n cdxml python -m pip install "cdxml-toolkit==0.5.17"
+conda run -n cdxml python -m pip install "mcp==2.0.0" "cdxml-toolkit==0.5.17"
 $python = (conda run -n cdxml python -c "import sys; print(sys.executable)" | Select-Object -Last 1)
 Set-ExecutionPolicy -Scope Process Bypass
 & .\scripts\install.ps1 -Python $python -Apply -ConfigureMcp

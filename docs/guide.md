@@ -20,7 +20,7 @@ Set-Location codex-chemdraw-skill
 
 conda create -n cdxml python=3.12 -y
 conda run -n cdxml python -m pip install --upgrade pip
-conda run -n cdxml python -m pip install "cdxml-toolkit==0.5.17"
+conda run -n cdxml python -m pip install "mcp==2.0.0" "cdxml-toolkit==0.5.17"
 conda run -n cdxml python -c "import cdxml_toolkit, mcp, rdkit, win32com.client; print('runtime ok')"
 
 $python = (conda run -n cdxml python -c "import sys; print(sys.executable)" | Select-Object -Last 1)
@@ -71,6 +71,8 @@ The Skill uses progressive disclosure so routine prompts load only the context t
 5. Inventory shards support targeted audit by module or function name.
 
 Public MCP tools are registered through one extension registry and executed in isolated workers with hard timeouts and structured errors. New tools return `ok`, `outputs`, `warnings`, and `metadata`; established tools retain their compatible names and contracts.
+
+The tested server runtime uses MCP Python SDK 2.0.0. An internal compatibility module maps the high-level SDK rename for `cdxml-toolkit==0.5.17`; MCP SDK 1.x remains supported for existing installations.
 
 Generated signatures and inventory files must be regenerated from source. Do not manually duplicate those signatures in narrative documentation.
 

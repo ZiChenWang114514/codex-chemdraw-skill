@@ -416,6 +416,7 @@ def diagnose_runtime(
             version=sys.version.split()[0],
         ),
         "cdxml_toolkit": _distribution("cdxml-toolkit"),
+        "mcp_sdk": _distribution("mcp"),
     }
     capabilities["chemdraw"], capabilities["chemdraw_com"] = (
         _chemdraw_capabilities()
@@ -484,7 +485,7 @@ def diagnose_runtime(
             )
         requested.append("office_probe")
 
-    required = ["python", "cdxml_toolkit", "tool_registry", *requested]
+    required = ["python", "cdxml_toolkit", "mcp_sdk", "tool_registry", *requested]
     ok = all(capabilities[name]["status"] == "available" for name in required)
     warnings = []
     for name, capability in capabilities.items():

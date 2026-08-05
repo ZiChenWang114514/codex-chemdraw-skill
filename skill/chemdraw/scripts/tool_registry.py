@@ -6,6 +6,10 @@ from dataclasses import dataclass
 import inspect
 from typing import Any, Callable
 
+import mcp_compat
+
+mcp_compat.install_legacy_fastmcp_alias()
+
 from cdxml_toolkit.mcp_server import server as upstream
 
 from extended_tools import PUBLIC_TOOLS
