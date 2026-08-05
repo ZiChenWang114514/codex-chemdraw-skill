@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+import json
 import os
 from pathlib import Path
 import tempfile
@@ -10,6 +11,7 @@ from typing import Any, Optional, Union
 
 import artifact_safety
 import native_io
+import native_renderer
 
 
 _TEMP_OUTPUT = Path(tempfile.gettempdir()) / "codex-chemdraw"
@@ -73,12 +75,31 @@ def draw_molecule(mol_json: dict, output_path: Optional[str] = None) -> dict:
 
     upstream = _raw_upstream(upstream)
 
-    if not mol_json or (isinstance(mol_json, dict) and not mol_json.get("smiles")):
+    smiles = mol_json.get("smiles") if isinstance(mol_json, dict) else None
+    if isinstance(mol_json, str):
+        try:
+            decoded = json.loads(mol_json)
+            smiles = decoded.get("smiles") if isinstance(decoded, dict) else None
+        except json.JSONDecodeError:
+            smiles = None
+    if not mol_json or not smiles:
         return upstream(mol_json, output_path=output_path)
     destination = _destination(None, output_path, tag="molecule", suffix=".cdxml")
+
+    def draw_and_validate(staged: Path):
+        result = upstream(mol_json, output_path=str(staged))
+        if isinstance(result, dict) and result.get("ok"):
+            from structure_fidelity import repair_and_validate_drawn_cdxml
+
+            validation = repair_and_validate_drawn_cdxml(str(smiles), staged)
+            metadata = dict(result.get("metadata") or {})
+            metadata["chemistry_validation"] = validation
+            result = {**result, "metadata": metadata}
+        return result
+
     return _run_file_tool(
         destination,
-        lambda staged: upstream(mol_json, output_path=str(staged)),
+        draw_and_validate,
     )
 
 
@@ -430,11 +451,10 @@ def render_to_png(
     output_path: Optional[str] = None,
 ) -> dict:
     """Render CDXML to a validated PNG through a staging file."""
-    from cdxml_toolkit.mcp_server.server import render_to_png as upstream
-
-    upstream = _raw_upstream(upstream)
-
     if not cdxml_path or not cdxml_path.strip():
+        from cdxml_toolkit.mcp_server.server import render_to_png as upstream
+
+        upstream = _raw_upstream(upstream)
         return upstream(cdxml_path, output_path=output_path)
     source = artifact_safety.validate_input_file(cdxml_path, suffixes=(".cdxml",))
     destination = _destination(source, output_path, tag="rendered", suffix=".png")
@@ -443,9 +463,12 @@ def render_to_png(
         lambda staged: native_io.bridge_file(
             source,
             staged,
-            lambda native_source, native_destination: upstream(
-                str(native_source), output_path=str(native_destination)
-            ),
+            lambda native_source, native_destination: {
+                "ok": True,
+                "output": native_renderer.render_cdxml(
+                    native_source, native_destination, dpi=300
+                ),
+            },
             output_kind="png",
         ),
     )

@@ -23,6 +23,7 @@ class ToolSpec:
     return_json_text: bool = False
     group: str = "official"
     resource_class: str | None = None
+    timeout_seconds: int | None = None
 
 
 CHEMDRAW_COM_TOOLS = {
@@ -45,6 +46,10 @@ CHEMDRAW_COM_TOOLS = {
 
 def _resource_class(name: str) -> str | None:
     return "chemdraw_com" if name in CHEMDRAW_COM_TOOLS else None
+
+
+def _tool_timeout(name: str) -> int | None:
+    return 90 if name == "modify_molecule" else None
 
 
 def _merge_named_tools(existing: dict, incoming: dict, *, source: str) -> dict:
@@ -74,6 +79,7 @@ def build_registry() -> dict[str, ToolSpec]:
             annotations=tool.annotations,
             group="official",
             resource_class=_resource_class(tool.name),
+            timeout_seconds=_tool_timeout(tool.name),
         )
 
     remote = {
@@ -85,6 +91,7 @@ def build_registry() -> dict[str, ToolSpec]:
             return_json_text=True,
             group="remote",
             resource_class=_resource_class(name),
+            timeout_seconds=_tool_timeout(name),
         )
         for name, function in REMOTE_TOOLS.items()
     }
@@ -97,6 +104,7 @@ def build_registry() -> dict[str, ToolSpec]:
             return_json_text=True,
             group="extended",
             resource_class=_resource_class(name),
+            timeout_seconds=_tool_timeout(name),
         )
         for name, function in PUBLIC_TOOLS.items()
     }

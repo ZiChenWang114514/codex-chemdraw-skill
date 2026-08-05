@@ -16,6 +16,7 @@ import mcp_server
 import native_io
 import process_control
 import resource_lock
+import tool_registry
 import tool_worker
 
 
@@ -141,6 +142,11 @@ class WorkerRuntimeTests(unittest.TestCase):
         self.assertEqual(tool_worker._resource_timeout(570), 565)
         self.assertEqual(tool_worker._resource_timeout(5), 1)
         self.assertEqual(tool_worker._resource_timeout(1), 1)
+
+    def test_molecule_analysis_has_a_shorter_worker_timeout(self):
+        registry = tool_registry.build_registry()
+
+        self.assertEqual(registry["modify_molecule"].timeout_seconds, 90)
 
     def test_timeout_is_structured_and_terminates_worker_tree(self):
         process = mock.Mock()

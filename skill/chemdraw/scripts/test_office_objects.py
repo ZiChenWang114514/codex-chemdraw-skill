@@ -225,8 +225,10 @@ class OfficeInspectionTests(unittest.TestCase):
             with mock.patch("pythoncom.CoInitialize") as initialize, mock.patch(
                 "pythoncom.CoUninitialize"
             ) as uninitialize, mock.patch(
-                "cdxml_toolkit.chemdraw.cdxml_to_image.cdxml_to_image",
-                side_effect=render,
+                "office_objects.native_renderer.render_cdxml",
+                side_effect=lambda source, destination, *, dpi: render(
+                    source, destination, png_dpi=dpi
+                ),
             ) as renderer:
                 office_objects._render_cdxml_preview(source, destination)
 

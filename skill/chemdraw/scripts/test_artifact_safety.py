@@ -146,6 +146,9 @@ class OfficialArtifactAdapterTests(unittest.TestCase):
 
         with mock.patch(
             "cdxml_toolkit.mcp_server.server.draw_molecule", side_effect=draw
+        ), mock.patch(
+            "structure_fidelity.repair_and_validate_drawn_cdxml",
+            return_value={"status": "preserved"},
         ):
             result = official_overrides.draw_molecule(
                 {"smiles": "CCO"}, output_path=str(output)
@@ -169,6 +172,9 @@ class OfficialArtifactAdapterTests(unittest.TestCase):
 
         with mock.patch(
             "cdxml_toolkit.mcp_server.server.draw_molecule", side_effect=draw
+        ), mock.patch(
+            "structure_fidelity.repair_and_validate_drawn_cdxml",
+            return_value={"status": "preserved"},
         ):
             result = official_overrides.draw_molecule(
                 '{"smiles":"CCO"}', output_path=str(output)
@@ -190,6 +196,9 @@ class OfficialArtifactAdapterTests(unittest.TestCase):
         decorated.__wrapped__ = raw
         with mock.patch(
             "cdxml_toolkit.mcp_server.server.draw_molecule", new=decorated
+        ), mock.patch(
+            "structure_fidelity.repair_and_validate_drawn_cdxml",
+            return_value={"status": "preserved"},
         ):
             result = official_overrides.draw_molecule(
                 {"smiles": "CCO"}, output_path=str(output)

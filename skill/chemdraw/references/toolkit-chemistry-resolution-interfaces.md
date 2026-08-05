@@ -15,11 +15,11 @@ Load for chemical-name resolution, CAS lookup, formula/MW validation, reagent ab
 
 ## Inputs And Outputs
 
-Accept a user-provided trusted SMILES or a resolver result. Verify canonical identity, formula, molecular weight, and source before drawing. Molecular modification must include an MCS-based before/after diff.
+Accept a user-provided trusted SMILES or a resolver result. Verify canonical identity, formula, molecular weight, and source before drawing. Molecular modification must include an MCS-based before/after diff. `draw_molecule` repairs missing RDKit wedge annotations, validates connectivity, Kekule bond orders, isotopes, charges, specified tetrahedral centers, and E/Z geometry, then returns the result in `metadata.chemistry_validation`.
 
 ## Failure Modes
 
-Names may be ambiguous, network resolvers may disagree, and abbreviations may be context dependent. Return alternatives and provenance rather than selecting silently. Reject direct string edits that bypass molecular graph validation.
+Names may be ambiguous, network resolvers may disagree, and abbreviations may be context dependent. Return alternatives and provenance rather than selecting silently. Reject direct string edits that bypass molecular graph validation. Treat `stereochemistry_not_preserved` and `structure_fidelity_mismatch` as hard failures; do not publish or render the rejected CDXML.
 
 ## Supporting APIs
 

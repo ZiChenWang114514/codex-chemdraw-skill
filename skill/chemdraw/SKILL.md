@@ -5,12 +5,12 @@ description: Use when Codex needs ChemDraw or cdxml-toolkit to resolve, draw, ed
 
 # ChemDraw
 
-Use the `cdxml-toolkit` MCP server for stable operations. Preserve source files, ground every structure, and verify final chemistry artifacts through native ChemDraw rendering.
+Use the `cdxml-toolkit` MCP server for stable operations. Preserve source files, ground every structure, verify molecular semantics, and confirm final artifact compatibility through native ChemDraw rendering.
 
 ## Core Rules
 
 1. Obtain connectivity only from a trusted user value or a resolver/parser/OCSR tool. Never pass invented or hand-edited SMILES directly; route intentional edits through `modify_molecule` and review its MCS diff.
-2. Apply molecular changes with `modify_molecule` and inspect its MCS diff before drawing.
+2. Apply molecular changes with `modify_molecule` and inspect its MCS diff before drawing. A trusted SMILES that requires no change can go directly to `draw_molecule`.
 3. Treat low-confidence or multiple OCSR candidates as unresolved until identity is validated.
 4. Never upload an image unless the user authorized third-party processing. Remote DECIMER additionally requires `confirm_upload=true`.
 5. Keep large CDXML and reaction JSON in files. Preserve inputs and write modifications to new paths.
@@ -43,4 +43,4 @@ For an exact callable signature, read [mcp-signatures.md](references/mcp-signatu
 
 ## Acceptance
 
-Return absolute output paths. Check every output exists and is non-empty. Render final CDXML through ChemDraw COM; inspect image dimensions. Open or render final DOCX/PPTX and confirm editable OLE objects remain embedded. Report warnings and unresolved chemistry explicitly.
+Return absolute output paths. Check every output exists and is non-empty. For molecule drawing, require `metadata.chemistry_validation.status=preserved` and inspect the reported stereocenters, double-bond geometry, isotopes, charges, and wedge count. Render final CDXML through ChemDraw COM and inspect image dimensions; rendering confirms native compatibility, not molecular identity by itself. Open or render final DOCX/PPTX and confirm editable OLE objects remain embedded. Report warnings and unresolved chemistry explicitly.

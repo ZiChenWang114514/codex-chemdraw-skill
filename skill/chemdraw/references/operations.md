@@ -44,11 +44,12 @@ Read [decimer-api.md](decimer-api.md) for the HTTP contract.
 
 - MCP startup timeout: verify discovered Python and import `mcp_server.py` directly.
 - Tool timeout: raise the worker timeout only after confirming the operation is legitimately long-running.
+- Molecular analysis timeout: `modify_molecule` is limited to 90 seconds because ChemScript naming and decomposition can become expensive for complex fused structures. Trusted SMILES can be drawn directly when no modification is requested.
 - Native resource busy: ChemDraw COM operations share a named per-user mutex. Let the active render, conversion, or Office operation finish before retrying; ordinary parsing remains concurrent.
 - Worker error id: inspect `%LOCALAPPDATA%\Codex\chemdraw-mcp\logs\worker-<id>.log`; detailed exceptions are intentionally not returned over MCP.
-- COM failure: close visible ChemDraw documents, verify registration, and run the smoke test.
+- COM failure: verify registration and run the smoke test. Rendering requests a dedicated automation instance so an already open interactive session is not reused, waits for a stable file, and retries one silent `SaveAs`. Batch rendering reuses one dedicated application instance.
 - Native path failure: the Skill copies inputs into an ASCII-only workspace before ChemDraw or Office COM calls, validates native output there, and publishes it transactionally to the requested path. `CHEMDRAW_NATIVE_TEMP` can select an explicit writable ASCII root. `native_ascii_workspace_unavailable`, `native_saveas_silent_failure`, `native_output_missing`, and `native_output_invalid` identify failures before publication.
-- License or activation window: stop validation. With both 32-bit and 64-bit ChemDraw installed, verify which registry view and Python bitness selected `/Automation`; do not alter an activated interactive installation as a shortcut.
+- `chemdraw_license_unavailable`: ChemDraw COM returned HRESULT `-2147221230` or an equivalent license message. Stop native validation and inspect the installed product license, Python bitness, and COM registration. Do not treat showing a hidden application window as an activation fix, and do not alter an activated interactive installation as a shortcut.
 - ChemScript failure: inspect the bridge health output; do not call the private server protocol.
 - Config drift: run the config script without `-Apply`, review its proposed block, then apply with automatic backup. Failed writes restore only when the config fingerprint still matches the last known state; concurrent edits are preserved.
 

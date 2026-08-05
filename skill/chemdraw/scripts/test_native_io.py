@@ -329,8 +329,10 @@ class NativeIOIntegrationTests(unittest.TestCase):
             with mock.patch("pythoncom.CoInitialize"), mock.patch(
                 "pythoncom.CoUninitialize"
             ), mock.patch(
-                "cdxml_toolkit.chemdraw.cdxml_to_image.cdxml_to_image",
-                side_effect=render,
+                "office_objects.native_renderer.render_cdxml",
+                side_effect=lambda source, destination, *, dpi: render(
+                    source, destination, png_dpi=dpi
+                ),
             ):
                 office_objects._render_cdxml_preview(source, destination)
 
@@ -355,7 +357,10 @@ class NativeIOIntegrationTests(unittest.TestCase):
                 return {"ok": True, "output": str(output_path)}
 
             with mock.patch(
-                "cdxml_toolkit.mcp_server.server.render_to_png", side_effect=render
+                "official_overrides.native_renderer.render_cdxml",
+                side_effect=lambda source, destination, *, dpi: (
+                    render(source, output_path=destination), str(destination)
+                )[1],
             ):
                 result = official_overrides.render_to_png(
                     str(source), output_path=str(destination)

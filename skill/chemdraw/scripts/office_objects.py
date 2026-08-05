@@ -13,6 +13,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 import native_io
+import native_renderer
 
 
 _R_ID = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"
@@ -358,12 +359,10 @@ def _convert_cdx_to_cdxml(cdx_data: bytes) -> str:
 
 
 def _render_cdxml_preview(source: str, destination: str) -> None:
-    from cdxml_toolkit.chemdraw.cdxml_to_image import cdxml_to_image
-
     def render(native_source: Path, native_destination: Path) -> None:
         with com_apartment():
-            cdxml_to_image(
-                str(native_source), str(native_destination), png_dpi=300
+            native_renderer.render_cdxml(
+                native_source, native_destination, dpi=300
             )
 
     native_io.bridge_file(

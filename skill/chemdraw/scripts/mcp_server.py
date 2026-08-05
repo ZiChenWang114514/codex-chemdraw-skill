@@ -332,12 +332,15 @@ def _adapt_tool(
     function: typing.Callable,
     *,
     return_json_text: bool = False,
+    timeout_seconds: int | None = None,
 ) -> typing.Callable:
     """Preserve source parameters while routing execution through a worker."""
 
     @functools.wraps(function)
     async def invoke(*args, **kwargs):
-        outcome = await _run_worker_async(name, args, kwargs)
+        outcome = await _run_worker_async(
+            name, args, kwargs, timeout_seconds=timeout_seconds
+        )
         if not outcome["ok"]:
             raise RuntimeError(json.dumps(outcome, indent=2))
         result = outcome["result"]
@@ -379,6 +382,7 @@ def build_server() -> FastMCP:
                 spec.name,
                 spec.function,
                 return_json_text=spec.return_json_text,
+                timeout_seconds=spec.timeout_seconds,
             )
         )
     return mcp

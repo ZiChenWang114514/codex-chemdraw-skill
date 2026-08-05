@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import redirect_stderr, redirect_stdout
+import contextvars
 import copy
 import io
 import json
@@ -18,6 +19,7 @@ import zipfile
 
 import artifact_safety
 import native_io
+import native_renderer
 from runtime_diagnostics import diagnose_runtime
 
 
@@ -29,6 +31,9 @@ _ALIGN_MODES = {"rdkit", "rxnmapper", "kabsch"}
 _CFB_SIGNATURE = bytes.fromhex("D0CF11E0A1B11AE1")
 _CHEMDRAW_CLSID = bytes.fromhex("216DBA412EA0CE118FD90020AFD1F20C")
 _CHEMDRAW_CLSID_TEXT = "41BA6D21-A02E-11CE-8FD9-0020AFD1F20C"
+_ACTIVE_RENDER_SESSION = contextvars.ContextVar(
+    "chemdraw_render_session", default=None
+)
 
 
 def _contract(outputs: dict[str, Any], warnings=None, metadata=None) -> dict[str, Any]:
@@ -364,14 +369,19 @@ def _run_cleanup(source: str, destination: str, approach: str) -> Any:
 
 
 def _render_cdxml(source: str, destination: str, dpi: int = 300) -> str:
-    from cdxml_toolkit.chemdraw.cdxml_to_image import cdxml_to_image
+    session = _ACTIVE_RENDER_SESSION.get()
+
+    def render(native_source: Path, native_destination: Path) -> str:
+        if session is not None:
+            return session.render(native_source, native_destination, dpi=dpi)
+        return native_renderer.render_cdxml(
+            native_source, native_destination, dpi=dpi
+        )
 
     return native_io.bridge_file(
         source,
         destination,
-        lambda native_source, native_destination: cdxml_to_image(
-            str(native_source), str(native_destination), png_dpi=dpi
-        ),
+        render,
         output_kind=Path(destination).suffix.lstrip("."),
     )
 
@@ -620,13 +630,18 @@ def render_cdxml_files(
         with tempfile.TemporaryDirectory(prefix=".render-", dir=directory) as stage_dir:
             stage = Path(stage_dir)
             staged = []
-            for source, destination in zip(sources, destinations):
-                temporary = stage / destination.name
-                _render_cdxml(str(source), str(temporary), dpi)
-                validation = _assert_output(temporary)
-                if format == "png":
-                    dimensions[str(destination)] = validation
-                staged.append((temporary, destination))
+            with native_renderer.NativeRenderSession(timeout_seconds=45) as session:
+                token = _ACTIVE_RENDER_SESSION.set(session)
+                try:
+                    for source, destination in zip(sources, destinations):
+                        temporary = stage / destination.name
+                        _render_cdxml(str(source), str(temporary), dpi)
+                        validation = _assert_output(temporary)
+                        if format == "png":
+                            dimensions[str(destination)] = validation
+                        staged.append((temporary, destination))
+                finally:
+                    _ACTIVE_RENDER_SESSION.reset(token)
             _commit_staged_outputs(staged)
     except Exception:
         if not directory_existed:

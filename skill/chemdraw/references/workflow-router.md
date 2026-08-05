@@ -6,8 +6,10 @@ Load one section matching the user's intent. Exact signatures live only in [mcp-
 
 1. Resolve a name with `resolve_name`, or accept user-supplied trusted SMILES.
 2. Verify identity, formula, molecular weight, and ambiguity.
-3. For changes, call `modify_molecule` and inspect the MCS diff.
-4. Call `draw_molecule`, then `render_to_png` for native validation.
+3. If no structural change is requested, do not call `modify_molecule(operation="analyze")` merely to authorize drawing; complex naming analysis may be expensive and is limited to 90 seconds.
+4. For actual changes, call `modify_molecule` and inspect the MCS diff.
+5. Call `draw_molecule` and require `metadata.chemistry_validation.status=preserved`. Compare stereocenter, E/Z, isotope, charge, and wedge metadata with the source.
+6. Call `render_to_png` for native compatibility and visual inspection. A successful PNG does not independently prove molecular identity.
 
 ## Create Or Edit A Reaction
 
@@ -27,7 +29,7 @@ Load one section matching the user's intent. Exact signatures live only in [mcp-
 ## Convert Or Render
 
 1. Convert CDX with `convert_cdx_cdxml`; edit CDXML, not binary CDX.
-2. Render one file with `render_to_png` or a collection/PNG/SVG with `render_cdxml_files`.
+2. Render one file with `render_to_png` or a collection/PNG/SVG with `render_cdxml_files`. Batch rendering reuses one ChemDraw application session and stops on the first failed export.
 3. Require native ChemDraw output for reaction and Office fidelity checks.
 
 ## Work With Office
