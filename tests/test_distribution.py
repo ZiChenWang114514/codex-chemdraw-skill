@@ -25,6 +25,7 @@ class DistributionTests(unittest.TestCase):
             ".github/ISSUE_TEMPLATE/feature_request.yml",
             "docs/guide.md",
             "docs/zh-cn.md",
+            "scripts/check_prerequisites.ps1",
             "scripts/install.ps1",
             "scripts/validate_distribution.py",
         ]
@@ -57,6 +58,7 @@ class DistributionTests(unittest.TestCase):
         self.assertTrue((SKILL / "SKILL.md").is_file())
         self.assertTrue((SKILL / "agents" / "openai.yaml").is_file())
         self.assertTrue((SKILL / "references" / "workflow-router.md").is_file())
+        self.assertTrue((SKILL / "scripts" / "check_prerequisites.ps1").is_file())
         self.assertTrue((SKILL / "scripts" / "mcp_server.py").is_file())
         self.assertFalse((SKILL / "README.md").exists())
 
@@ -125,6 +127,14 @@ class DistributionTests(unittest.TestCase):
         self.assertIn('cdxml-toolkit==0.5.17', workflow)
         self.assertIn('mcp==2.0.0', workflow)
         self.assertIn('unittest discover -s skill/chemdraw/scripts', workflow)
+        self.assertIn('check_prerequisites.ps1', workflow)
+
+    def test_health_check_can_skip_optional_office_probes(self) -> None:
+        health_check = (SKILL / "scripts" / "health_check.ps1").read_text(
+            encoding="utf-8-sig"
+        )
+        self.assertIn("[switch]$SkipOffice", health_check)
+        self.assertIn("if (-not $SkipOffice)", health_check)
 
     def test_removed_fastmcp_import_is_isolated_to_compatibility_module(self) -> None:
         matches = []

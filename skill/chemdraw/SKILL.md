@@ -1,6 +1,6 @@
 ---
 name: chemdraw
-description: Use when Codex needs ChemDraw or cdxml-toolkit to resolve, compare, draw, edit, clean, merge, polish, parse, convert, render, recognize, analyze, or embed chemical structures and reaction schemes, including controlled ChemScript SDK work. Triggers include molecule names, trusted SMILES, CDX/CDXML, DECIMER/OCSR images, reaction screenshots, ELN/SciFinder RDF, LCMS/NMR, lab books, and editable ChemDraw objects in DOCX/PPTX.
+description: Use when Codex needs to install, configure, diagnose, or use ChemDraw or cdxml-toolkit to resolve, compare, draw, edit, clean, merge, polish, parse, convert, render, recognize, analyze, or embed chemical structures and reaction schemes, including controlled ChemScript SDK work. Triggers include setup and runtime problems, molecule names, trusted SMILES, CDX/CDXML, DECIMER/OCSR images, reaction screenshots, ELN/SciFinder RDF, LCMS/NMR, lab books, and editable ChemDraw objects in DOCX/PPTX.
 ---
 
 # ChemDraw
@@ -27,6 +27,8 @@ Load [workflow-router.md](references/workflow-router.md), then read only the wor
 - Word/PowerPoint extraction, embedding, or template filling
 - ELN/RDF, LCMS/NMR, experiment discovery, or lab-book assembly
 - Runtime diagnosis or installation
+
+For first-time installation or upgrade work, load [operations.md](references/operations.md) before changing files or MCP configuration. Run the read-only prerequisite checker, distinguish core, native ChemDraw, ChemScript, Office, and DECIMER requirements, and verify only the capabilities the user selected.
 
 For an exact callable signature, read [mcp-signatures.md](references/mcp-signatures.md). For selection, policy, and errors, read [toolkit-tools.md](references/toolkit-tools.md). Do not guess arguments from prose.
 

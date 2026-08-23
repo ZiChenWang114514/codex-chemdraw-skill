@@ -4,6 +4,26 @@
 
 Load for installation, MCP startup, worker timeout, ChemDraw COM, ChemScript, DECIMER, or path-discovery problems.
 
+## Installation Prerequisites
+
+Run `scripts/check_prerequisites.ps1` before a first installation or upgrade. It is read-only: it does not launch ChemDraw, read chemistry files, install packages, or change configuration. Pass the intended MCP runtime with `-Python`; add `-Json` only when a structured support report is useful.
+
+Classify requirements by requested capability:
+
+- Portable CDXML work requires 64-bit Windows, PowerShell 5.1 or later, a 64-bit Python 3.10-3.13 runtime, `cdxml-toolkit`, MCP SDK, and a working `codex` command. Python 3.12, `cdxml-toolkit==0.5.17`, and `mcp==2.0.0` are tested.
+- Native rendering, CDX conversion, and ChemDraw cleanup additionally require licensed Windows desktop ChemDraw, .NET Framework 4.8 for current releases, working `ChemDraw.Application` COM registration, and manual activation confirmation.
+- Molecular comparison and ChemScript SDK execution additionally require managed and native ChemScript DLLs. Keep the main MCP Python 64-bit; use a separate helper Python when a legacy ChemScript DLL is 32-bit.
+- Editable DOCX/PPTX objects require the corresponding desktop Office application. Office is optional for other workflows.
+- Local OCSR requires DECIMER model weights. Remote OCSR remains an explicit upload decision and does not replace local prerequisites.
+
+In a repository checkout, preview `scripts/install.ps1 -Python <path> -ConfigureMcp` before adding `-Apply`. After installation and a Codex restart, select the appropriate verification:
+
+- `health_check.ps1 -SkipNativeChemDraw` for code, package, test, and MCP checks without native applications.
+- `health_check.ps1 -SkipOffice` for native ChemDraw PNG and ChemScript checks without Word or PowerPoint.
+- `health_check.ps1` for complete native and Office validation.
+
+Do not report a skipped capability as verified. A manual ChemDraw activation check remains required because the prerequisite script intentionally avoids launching licensed software.
+
 ## Runtime Discovery
 
 Path precedence is explicit argument, environment variable, active Conda/current Python, PATH/common installation locations, then a legacy machine fallback. Supported variables:

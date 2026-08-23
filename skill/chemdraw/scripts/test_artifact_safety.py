@@ -101,6 +101,54 @@ class ArtifactSafetyTests(unittest.TestCase):
         self.assertFalse(first.exists())
         self.assertEqual(second.read_text(encoding="utf-8"), "competitor")
 
+    def test_publish_directory_retries_transient_permission_error(self):
+        staged = self.root / ".inspection.tmp"
+        staged.mkdir()
+        (staged / "manifest.json").write_text("{}", encoding="ascii")
+        destination = self.root / "inspection"
+        real_rename = Path.rename
+        attempts = 0
+
+        def flaky_rename(source, target):
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise PermissionError(5, "temporarily unavailable", str(source))
+            return real_rename(source, target)
+
+        with mock.patch.object(Path, "rename", autospec=True, side_effect=flaky_rename):
+            artifact_safety.publish_directory(staged, destination)
+
+        self.assertEqual(attempts, 2)
+        self.assertEqual(
+            (destination / "manifest.json").read_text(encoding="ascii"), "{}"
+        )
+
+    def test_publish_directory_preserves_competing_destination(self):
+        staged = self.root / ".inspection.tmp"
+        staged.mkdir()
+        (staged / "manifest.json").write_text("ours", encoding="ascii")
+        destination = self.root / "inspection"
+
+        def competing_rename(_source, target):
+            Path(target).mkdir()
+            (Path(target) / "manifest.json").write_text(
+                "competitor", encoding="ascii"
+            )
+            raise PermissionError(5, "temporarily unavailable", str(target))
+
+        with mock.patch.object(
+            Path, "rename", autospec=True, side_effect=competing_rename
+        ):
+            with self.assertRaisesRegex(ValueError, "overwrite"):
+                artifact_safety.publish_directory(staged, destination)
+
+        self.assertEqual(
+            (destination / "manifest.json").read_text(encoding="ascii"),
+            "competitor",
+        )
+        self.assertTrue(staged.exists())
+
     def test_artifact_record_contains_absolute_path_size_and_sha256(self):
         output = self.root / "artifact.bin"
         output.write_bytes(b"artifact-data")

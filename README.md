@@ -20,14 +20,15 @@ This is an independent community project. It is not affiliated with or endorsed 
 
 ## Requirements
 
-- Windows 10 or later.
-- A licensed, activated ChemDraw installation for native rendering and automation.
-- Python 3.10 or later; Python 3.12 is the tested configuration.
+- 64-bit Windows 10 or Windows 11.
+- A licensed, activated Windows desktop installation of ChemDraw for native rendering and automation.
+- A 64-bit Python 3.10-3.13 environment; Python 3.12 is the tested configuration.
 - `cdxml-toolkit==0.5.17` for the tested configuration.
 - `mcp==2.0.0` for the tested MCP runtime; SDK 1.x remains compatible.
-- Codex CLI or Codex desktop for Skill and MCP integration.
+- Codex with a working `codex` command for MCP registration.
 
 ChemDraw, Microsoft Office, and local DECIMER model weights are not bundled.
+Microsoft Office, ChemScript, and DECIMER are required only for the features that use them. First-time users should follow the [step-by-step Chinese guide](docs/zh-cn.md#从零开始安装) or the [detailed English installation guide](docs/guide.md#first-time-windows-setup) before using the commands below.
 
 ## Quick Start
 
@@ -37,8 +38,9 @@ Set-Location codex-chemdraw-skill
 
 conda create -n cdxml python=3.12 -y
 conda run -n cdxml python -m pip install "mcp==2.0.0" "cdxml-toolkit==0.5.17"
-$python = (conda run -n cdxml python -c "import sys; print(sys.executable)" | Select-Object -Last 1)
+$python = (conda run -n cdxml python -c "import sys; print(sys.executable)" | Select-Object -Last 1).Trim()
 Set-ExecutionPolicy -Scope Process Bypass
+& .\scripts\check_prerequisites.ps1 -Python $python
 & .\scripts\install.ps1 -Python $python -Apply -ConfigureMcp
 ```
 
@@ -50,6 +52,7 @@ codex mcp get cdxml-toolkit --json
 ```
 
 The installer is read-only unless `-Apply` is supplied. Existing Skill and MCP configuration files are backed up before replacement.
+Use `-SkipOffice` with the health check when Word or PowerPoint desktop is not installed. Use `-SkipNativeChemDraw` only for a portable code and MCP check that intentionally omits all native ChemDraw and Office probes.
 
 stdio remains the default. For a ChemDraw workstation shared through a private network, see the authenticated [Streamable HTTP setup](docs/guide.md#streamable-http) before exposing a listening port.
 

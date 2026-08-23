@@ -4,8 +4,9 @@ param(
     [string]$ReferenceRoot,
     [string]$CodexCommand = 'codex',
     [switch]$SkipNativeChemDraw,
+    [switch]$SkipOffice,
     [ValidateRange(1, 3600)]
-    [int]$CommandTimeoutSeconds = 120
+    [int]$CommandTimeoutSeconds = 300
 )
 
 $ErrorActionPreference = 'Stop'
@@ -15,6 +16,8 @@ $diagnosticsScript = Join-Path $PSScriptRoot 'runtime_diagnostics.py'
 
 if ($SkipNativeChemDraw) {
     Write-Warning 'Native ChemDraw checks skipped by -SkipNativeChemDraw: native PNG and Office OLE probes will not run'
+} elseif ($SkipOffice) {
+    Write-Warning 'Office OLE probes skipped by -SkipOffice: native ChemDraw PNG and ChemScript probes will still run'
 }
 
 function Get-Sha256Hex {
@@ -298,7 +301,10 @@ if ($discovery) {
 
     $diagnosticArguments = @($diagnosticsScript, '--json')
     if (-not $SkipNativeChemDraw) {
-        $diagnosticArguments += @('--native-probe', '--office-probe')
+        $diagnosticArguments += @('--native-probe')
+        if (-not $SkipOffice) {
+            $diagnosticArguments += @('--office-probe')
+        }
     }
     $diagnosticTimeoutSeconds = 270
     $diagnosticResult = Invoke-BoundedNative `

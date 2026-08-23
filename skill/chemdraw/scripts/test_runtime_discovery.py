@@ -905,6 +905,7 @@ class HealthCheckTests(unittest.TestCase):
 
     def test_health_allows_bounded_full_diagnostics_to_finish(self):
         source = HEALTH_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("[int]$CommandTimeoutSeconds = 300", source)
         self.assertIn("$diagnosticTimeoutSeconds = 270", source)
         self.assertIn("-TimeoutSeconds $diagnosticTimeoutSeconds", source)
 

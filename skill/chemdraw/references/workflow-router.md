@@ -55,6 +55,10 @@ Load one section matching the user's intent. Exact signatures live only in [mcp-
 4. Parse ELN/reaction files with `parse_reaction`; parse SciFinder exports with `parse_scifinder_rdf`. CAS enrichment requires explicit PubChem confirmation and counts a resolution only when a valid field was actually added; inspect `metadata.cas_resolutions` for per-CAS outcomes.
 5. Build a lab entry with `format_lab_entry` or a complete experiment entry with `assemble_lab_book`.
 
+## Install Or Upgrade
+
+Read [operations.md](operations.md). Run `scripts/check_prerequisites.ps1` before changing the Skill or MCP configuration. Identify the requested capability set: portable CDXML, native ChemDraw, ChemScript, Office, local DECIMER, or remote HTTP. Keep the main Python 64-bit; configure any legacy 32-bit ChemScript helper separately. Preview the repository installer without `-Apply`, then apply only when installation was requested. Restart Codex and run the matching health-check mode.
+
 ## Diagnose Runtime
 
 Read [operations.md](operations.md). Start with `diagnose_runtime()` and load only the native probes needed for the failing capability. Run the full health check before changing Codex configuration.

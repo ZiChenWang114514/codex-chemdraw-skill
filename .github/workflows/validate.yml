@@ -25,6 +25,12 @@ jobs:
       - name: Validate repository distribution
         run: python scripts/validate_distribution.py
 
+      - name: Validate prerequisite checker
+        shell: pwsh
+        run: |
+          $python = (Get-Command python).Source
+          ./scripts/check_prerequisites.ps1 -Python $python -Json -SkipCodex -SkipChemDraw -SkipPythonPackages
+
       - name: Validate installer dry run
         shell: pwsh
         run: ./scripts/install.ps1

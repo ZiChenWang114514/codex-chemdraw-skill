@@ -4,38 +4,120 @@ This is the single detailed guide for installing, understanding, testing, and op
 
 ## Installation
 
-### Prerequisites
+### Choose the required feature set
 
-- Windows 10 or later.
-- Python 3.10 or later, preferably in a dedicated Conda environment.
-- A licensed and activated ChemDraw installation for COM automation and native rendering.
-- Microsoft PowerPoint or Word only for the corresponding Office workflows.
-- Optional local DECIMER model weights for offline image recognition.
+| Feature | Additional requirement |
+| --- | --- |
+| CDXML parsing, name resolution, and ordinary drawing | Codex, Python runtime, `cdxml-toolkit`, and MCP SDK |
+| Native PNG rendering, CDX conversion, and ChemDraw cleanup | Licensed Windows desktop ChemDraw with working COM registration |
+| Molecule comparison and full ChemScript SDK access | Managed and native ChemScript DLLs; older 32-bit releases may need a separate helper Python |
+| Editable ChemDraw objects in DOCX or PPTX | The corresponding Microsoft Word or PowerPoint desktop application |
+| Offline image recognition | DECIMER model weights and additional memory, disk space, and download time |
+| Access from another computer | A configured Windows server plus authenticated Streamable HTTP over an encrypted network |
 
-Clone the repository and run the installer from PowerShell:
+Office, DECIMER, and the ChemScript helper environment are optional until a workflow needs them.
+
+### Host prerequisites
+
+- 64-bit Windows 10 or Windows 11. macOS, Linux, and WSL can act as remote clients but cannot host ChemDraw COM automation.
+- Windows PowerShell 5.1 or PowerShell 7.
+- A working `codex` command and a completed Codex sign-in. Follow the [official Codex CLI guide](https://developers.openai.com/codex/cli).
+- A licensed Windows desktop ChemDraw installation. Browser-only ChemDraw does not expose COM or ChemScript. ChemDraw 22.0 is tested; review the [current Revvity system requirements](https://support.revvitysignals.com/hc/en-us/articles/43424307511572-ChemDraw-What-are-the-System-requirements-for-ChemDraw-ChemOffice) for the installed release.
+- A 64-bit Python 3.10-3.13 runtime. Python 3.12 is tested and a dedicated Conda environment is recommended.
+- [Git for Windows](https://git-scm.com/install/windows), or a GitHub ZIP download if Git is unavailable.
+- At least 10 GiB free disk space and 8 GiB RAM are practical minimums for the complete Python environment. Local DECIMER use benefits from 16 GiB RAM and additional free space.
+- Initial network access for the repository and Python dependencies. Local DECIMER adds a separate model download.
+
+The tested package pair is `cdxml-toolkit==0.5.17` and `mcp==2.0.0`. MCP SDK 1.x remains supported. Keep the main MCP environment 64-bit. When an older ChemScript DLL is 32-bit, configure a separate helper environment instead of changing the main runtime.
+
+### First-Time Windows Setup
+
+1. Install and activate desktop ChemDraw. Open it manually, create and save a small document, then close the application. The project does not install or alter product licensing.
+2. Install Codex with the current official Windows command below, run `codex --version`, start `codex`, and complete sign-in. On a managed computer that blocks downloaded scripts, ask the administrator to use the Windows method in the [official Codex CLI guide](https://developers.openai.com/codex/cli) instead of disabling organizational security controls.
 
 ```powershell
+powershell -ExecutionPolicy Bypass -c "irm https://chatgpt.com/codex/install.ps1 | iex"
+```
+
+3. Install [64-bit Miniconda](https://docs.conda.io/projects/conda/en/stable/user-guide/install/windows.html) and Git. Open **Anaconda PowerShell Prompt** so `conda` is available.
+4. Clone the repository and create the isolated runtime:
+
+```powershell
+Set-Location "$HOME\Documents"
 git clone https://github.com/ZiChenWang114514/codex-chemdraw-skill.git
-Set-Location codex-chemdraw-skill
+Set-Location .\codex-chemdraw-skill
 
-conda create -n cdxml python=3.12 -y
-conda run -n cdxml python -m pip install --upgrade pip
-conda run -n cdxml python -m pip install "mcp==2.0.0" "cdxml-toolkit==0.5.17"
-conda run -n cdxml python -c "import cdxml_toolkit, mcp, rdkit, win32com.client; print('runtime ok')"
+conda create -n cdxml python=3.12 pip -y
+conda activate cdxml
+python -m pip install --upgrade pip
+python -m pip install "mcp==2.0.0" "cdxml-toolkit==0.5.17"
+python -m pip check
+python -c "import cdxml_toolkit, mcp, rdkit, win32com.client; print('Python runtime OK')"
+$python = (python -c "import sys; print(sys.executable)").Trim()
+```
 
-$python = (conda run -n cdxml python -c "import sys; print(sys.executable)" | Select-Object -Last 1)
+Package installation includes scientific, Office-file processing, PDF, image, and machine-learning dependencies and can take considerably longer than a small Python package. These Python libraries do not install Microsoft Word or PowerPoint; editable Office-object workflows still require the desktop application.
+
+Run the read-only prerequisite report before installation:
+
+```powershell
 Set-ExecutionPolicy -Scope Process Bypass
+& .\scripts\check_prerequisites.ps1 -Python $python
+```
+
+`PASS` satisfies a check, `WARN` identifies an optional or manual item, `FAIL` requires attention, and `SKIP` means that no conclusion was obtained. The checker does not launch ChemDraw, inspect molecule files, or change system configuration. Add `-Json` for a machine-readable report. Use `-SkipPythonPackages` only for an early host check before package installation.
+
+If molecule comparison or ChemScript SDK tools are required, configure and ping the bridge:
+
+```powershell
+& $python -m cdxml_toolkit.chemdraw.chemscript_bridge configure
+& $python -m cdxml_toolkit.chemdraw.chemscript_bridge ping
+```
+
+When a 32-bit ChemScript installation has no compatible helper Python, activate `cdxml` and run `cdxml-doctor --no-tests`, then follow its dedicated helper-environment instructions. Keep the main `cdxml` environment 64-bit.
+
+Preview the Skill installation first, inspect the reported Python and destination, then apply it:
+
+```powershell
+& .\scripts\install.ps1 -Python $python -ConfigureMcp
 & .\scripts\install.ps1 -Python $python -Apply -ConfigureMcp
 ```
 
-Without `-Apply`, the installer only reports planned changes. With `-Apply`, it backs up an existing Skill before installing to `$HOME\.codex\skills\chemdraw`. `-ConfigureMcp` also backs up and updates `$HOME\.codex\config.toml`.
+Without `-Apply`, the installer reports its proposed paths without modifying them. With `-Apply`, it preserves the existing Skill under `$HOME\.codex\backups\skills\chemdraw` before installing to `$HOME\.codex\skills\chemdraw`. `-ConfigureMcp` also preserves and updates `$HOME\.codex\config.toml`.
 
-Restart Codex, then verify:
+Restart Codex and verify registration:
 
 ```powershell
 codex mcp get cdxml-toolkit --json
+& "$HOME\.codex\skills\chemdraw\scripts\check_prerequisites.ps1" -Python $python
+```
+
+Choose the health check that matches the installed applications:
+
+```powershell
+# Portable code, package, test, and MCP checks; no native application probes.
+& "$HOME\.codex\skills\chemdraw\scripts\health_check.ps1" -Python $python -SkipNativeChemDraw
+
+# Native ChemDraw PNG and ChemScript checks without Word or PowerPoint.
+& "$HOME\.codex\skills\chemdraw\scripts\health_check.ps1" -Python $python -SkipOffice
+
+# Full native, ChemScript, PowerPoint, and Word validation.
 & "$HOME\.codex\skills\chemdraw\scripts\health_check.ps1" -Python $python
 ```
+
+Close manually opened ChemDraw and Office applications before native probes. A selected health check succeeds only when it ends with `ChemDraw/Codex integration: OK`.
+
+### Installation Troubleshooting
+
+- `git`, `conda`, or `codex` is not recognized: reopen PowerShell after installation and confirm the correct user account. Use Anaconda PowerShell Prompt for Conda.
+- `No usable Python runtime found`: recompute `$python` from the `cdxml` environment and pass that exact path with `-Python`.
+- Package import or `pip check` fails: create a fresh `cdxml` environment and install the pinned package pair there; avoid sharing the environment with unrelated projects.
+- `ChemDraw.Application` is absent: verify that Windows desktop ChemDraw is installed, open it once, and repair the installation if COM registration remains missing.
+- ChemDraw is activated but a license probe fails: open and save a test document manually, close ChemDraw, and run the selected native check again. Do not change a working license as a diagnostic shortcut.
+- ChemScript files exist but `ping` fails: rerun `configure`, inspect DLL bitness, and use a separate helper Python for a 32-bit release.
+- Office is not installed: use `-SkipOffice`; use `-SkipNativeChemDraw` only when all native checks are intentionally omitted.
+- Codex cannot see the tools: fully restart Codex, run `codex mcp get cdxml-toolkit --json`, then run `codex doctor --all`.
+- Local DECIMER models are missing: ordinary drawing and ChemDraw workflows remain available. Install models only when offline image recognition is needed.
 
 ### Runtime Discovery
 
@@ -53,10 +135,10 @@ No username, Conda root, ChemDraw directory, or Office directory should be hard-
 
 An activated ChemDraw desktop application does not guarantee that every automation interface is available. `diagnose_runtime()` reports separate capability states; the full health check adds temporary native PNG, ChemScript, and PPTX/DOCX OLE probes.
 
-If a native workflow fails, confirm that Python and the required native component use compatible architectures, then run:
+If a native workflow fails, confirm that the main Python is 64-bit and any legacy ChemScript helper matches its DLL architecture, then run the appropriate check:
 
 ```powershell
-.\skill\chemdraw\scripts\health_check.ps1 -Python $python
+.\skill\chemdraw\scripts\health_check.ps1 -Python $python -SkipOffice
 codex doctor --all
 ```
 

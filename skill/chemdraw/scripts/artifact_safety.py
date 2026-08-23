@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import shutil
 import tempfile
+import time
 from typing import Any, Callable, Iterable, Iterator
 import xml.etree.ElementTree as ET
 import zipfile
@@ -201,16 +202,28 @@ def publish_directory(staged: str | Path, destination: str | Path) -> None:
     target = Path(destination).resolve()
     if target.exists():
         raise ValueError(f"Refusing to overwrite an existing directory: {target}")
-    try:
-        source.rename(target)
-    except FileExistsError as exc:
-        raise ValueError(f"Refusing to overwrite an existing directory: {target}") from exc
-    except OSError as exc:
-        if target.exists():
+    for attempt in range(6):
+        try:
+            source.rename(target)
+            return
+        except FileExistsError as exc:
             raise ValueError(
                 f"Refusing to overwrite an existing directory: {target}"
             ) from exc
-        raise
+        except PermissionError as exc:
+            if target.exists():
+                raise ValueError(
+                    f"Refusing to overwrite an existing directory: {target}"
+                ) from exc
+            if attempt == 5:
+                raise
+            time.sleep(min(0.05 * (2**attempt), 0.5))
+        except OSError as exc:
+            if target.exists():
+                raise ValueError(
+                    f"Refusing to overwrite an existing directory: {target}"
+                ) from exc
+            raise
 
 
 def artifact_record(path: str | Path) -> dict[str, Any]:
