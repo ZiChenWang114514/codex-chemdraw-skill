@@ -17,3 +17,5 @@ Include the affected version, tool name, minimal synthetic reproduction, expecte
 - MCP tools can read and write paths accessible to their Windows user. Review requested paths and use a least-privilege account for untrusted inputs.
 - CDXML, Office, RDF, PDF, and image files are untrusted input. Keep dependencies patched and avoid opening generated files outside an isolated test environment until validation succeeds.
 - API keys and proxy credentials must be provided through local secret management or environment variables and must never be committed.
+- Streamable HTTP binds to loopback by default. Non-loopback listening requires a bearer token and allowed Host configuration. Use an encrypted private network or HTTPS reverse proxy because the built-in HTTP listener does not provide TLS.
+- `/health` contains only process status. Authenticated `/metrics` uses fixed tool/status labels and must not include molecule strings, filenames, document text, or request parameters.

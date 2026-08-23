@@ -321,7 +321,7 @@ class PowerShellHarness:
                     capabilities = {
                         "python": {"status": "available"},
                         "cdxml_toolkit": {"status": "available", "version": "0.5.17"},
-                        "tool_registry": {"status": "available", "count": 30},
+                        "tool_registry": {"status": "available", "count": 34},
                         "decimer_models": {"status": "missing"},
                     }
                     if "--native-probe" in args:
@@ -332,7 +332,7 @@ class PowerShellHarness:
                         "ok": True,
                         "outputs": {"capabilities": capabilities},
                         "warnings": ["decimer_models: capability is unavailable"],
-                        "metadata": {"tool_count": 30, "network_used": False},
+                        "metadata": {"tool_count": 34, "network_used": False},
                     }))
                 raise SystemExit(0)
                 """
@@ -890,6 +890,7 @@ class HealthCheckTests(unittest.TestCase):
         self.assertNotIn("& $Python", source)
         self.assertNotIn("Get-FileHash", source)
         self.assertIn("Security.Cryptography.SHA256", source)
+        self.assertIn("pwsh.exe", source)
 
     def test_health_generates_and_compares_mcp_signatures(self):
         source = HEALTH_SCRIPT.read_text(encoding="utf-8")
@@ -904,7 +905,7 @@ class HealthCheckTests(unittest.TestCase):
 
     def test_health_allows_bounded_full_diagnostics_to_finish(self):
         source = HEALTH_SCRIPT.read_text(encoding="utf-8")
-        self.assertIn("$diagnosticTimeoutSeconds = 220", source)
+        self.assertIn("$diagnosticTimeoutSeconds = 270", source)
         self.assertIn("-TimeoutSeconds $diagnosticTimeoutSeconds", source)
 
     def test_skip_native_chemdraw_warns_and_omits_chemscript_ping(self):

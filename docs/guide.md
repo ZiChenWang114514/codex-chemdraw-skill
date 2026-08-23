@@ -72,9 +72,37 @@ The Skill uses progressive disclosure so routine prompts load only the context t
 
 Public MCP tools are registered through one extension registry and executed in isolated workers with hard timeouts and structured errors. New tools return `ok`, `outputs`, `warnings`, and `metadata`; established tools retain their compatible names and contracts.
 
+Molecule comparison resolves both inputs through the installed `ChemScriptBridge`, uses ChemScript InChI for exact identity when available, and computes chirality-aware plus connectivity-only RDKit fingerprints. Batch comparison reuses one bridge process, accepts at most 256 pairs, and does not repeat source representations in its result rows.
+
+The ChemScript SDK adapter reflects the installed managed assembly at runtime. It catalogs every SDK-declared public type and member, then reports both catalog coverage and execution-path coverage. A declarative program can construct objects, call static or instance methods, read or write members, index and enumerate collections, and dispose objects. File access, replacement of existing files, and SWIG pointer/handle interoperability each require an explicit option. This gives every public member a discoverable record while keeping native interop isolated from the MCP process.
+
 The tested server runtime uses MCP Python SDK 2.0.0. An internal compatibility module maps the high-level SDK rename for `cdxml-toolkit==0.5.17`; MCP SDK 1.x remains supported for existing installations.
 
 Generated signatures and inventory files must be regenerated from source. Do not manually duplicate those signatures in narrative documentation.
+
+### Streamable HTTP
+
+stdio remains the default and requires no network listener. To serve a licensed ChemDraw workstation to another computer, generate a bearer token and start the optional HTTP mode. The example listens on all interfaces but accepts only the workstation address supplied in `--allowed-host`:
+
+```powershell
+$env:CHEMDRAW_MCP_HTTP_API_KEY = python -c "import secrets; print(secrets.token_urlsafe(32))"
+python .\skill\chemdraw\scripts\mcp_server.py `
+  --transport streamable-http `
+  --host 0.0.0.0 `
+  --port 8029 `
+  --allowed-host "192.168.1.20:*"
+```
+
+On the client computer, place the same token in a different local environment variable and register the URL:
+
+```powershell
+$env:CHEMDRAW_REMOTE_TOKEN = "<same token>"
+codex mcp add chemdraw-remote `
+  --url "http://192.168.1.20:8029/mcp" `
+  --bearer-token-env-var CHEMDRAW_REMOTE_TOKEN
+```
+
+Use Tailscale, WireGuard, or an HTTPS reverse proxy when traffic leaves a fully trusted host-only network. Plain HTTP does not encrypt the bearer token. Non-loopback listening refuses to start without a token; wildcard listening also requires an explicit allowed Host pattern. The public `/health` response contains only process state. `/metrics` requires the bearer token whenever authentication is configured and exports call duration, timeout, worker failure, active-worker, and local ChemDraw queue metrics. Metric labels contain only registered tool names and stable status codes.
 
 ## Development and Validation
 
@@ -99,6 +127,7 @@ GitHub Actions runs the portable checks. Machine-specific native checks remain l
 - Modifying tools generate a new output path by default and reject unintended overwrite.
 - Temporary files and outputs inherit local filesystem permissions; inspect them before sharing.
 - Never commit API keys, credentials, personal experiment data, proprietary documents, or licensed binaries.
+- HTTP authentication values remain in the parent server and are removed from worker environments.
 - Treat recognized or generated chemistry as a hypothesis until it is checked against the source and chemically validated.
 
 ## Third-Party Boundaries

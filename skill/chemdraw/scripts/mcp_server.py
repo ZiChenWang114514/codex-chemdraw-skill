@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import functools
+import hmac
 import inspect
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -15,8 +18,10 @@ import tempfile
 import threading
 import time
 import typing
+import weakref
 
 import mcp_compat
+import telemetry
 
 mcp_compat.install_legacy_fastmcp_alias()
 
@@ -33,6 +38,10 @@ DEFAULT_WORKER_OUTPUT_BYTES = 8 * 1024 * 1024
 _TIMEOUT_RETURN_CODE = -1001
 _CANCELLED_RETURN_CODE = -1002
 _OUTPUT_LIMIT_RETURN_CODE = -1003
+_NATIVE_LOCKS: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
+_NATIVE_LOCKS_GUARD = threading.Lock()
+_LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
+_ENVIRONMENT_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 
 
 def _positive_env_int(name: str, default: int) -> int:
@@ -59,19 +68,28 @@ def _timeout(value: int | None = None) -> int:
 
 def _worker_environment() -> dict[str, str]:
     exact = {
-        "ALL_PROXY", "APPDATA", "COMSPEC", "HOMEDRIVE", "HOMEPATH",
+        "ALL_PROXY", "ALLUSERSPROFILE", "APPDATA",
+        "COMMONPROGRAMFILES", "COMMONPROGRAMFILES(X86)", "COMMONPROGRAMW6432",
+        "COMPUTERNAME", "COMSPEC", "DRIVERDATA", "HOMEDRIVE", "HOMEPATH",
         "CONDA_PREFIX", "JAVA_HOME",
         "HTTP_PROXY", "HTTPS_PROXY", "LOCALAPPDATA", "NO_PROXY", "PATH",
-        "PATHEXT", "PROGRAMDATA", "PROGRAMFILES", "PROGRAMFILES(X86)",
+        "NUMBER_OF_PROCESSORS", "OS", "PATHEXT",
+        "PROCESSOR_ARCHITECTURE", "PROCESSOR_IDENTIFIER",
+        "PROCESSOR_LEVEL", "PROCESSOR_REVISION",
+        "PROGRAMDATA", "PROGRAMFILES", "PROGRAMFILES(X86)",
         "PROGRAMW6432", "REQUESTS_CA_BUNDLE", "SSL_CERT_FILE", "SYSTEMROOT",
-        "TEMP", "TMP", "USERPROFILE", "WINDIR",
+        "PUBLIC", "SYSTEMDRIVE", "TEMP", "TMP", "USERDOMAIN",
+        "USERDOMAIN_ROAMINGPROFILE", "USERNAME", "USERPROFILE", "WINDIR",
     }
     prefixes = ("CHEMDRAW_", "CHEMSCRIPT_", "DECIMER_", "TF_")
-    environment = {
-        key: value
-        for key, value in os.environ.items()
-        if key.upper() in exact or key.upper().startswith(prefixes)
-    }
+    credential_markers = ("API_KEY", "TOKEN", "PASSWORD", "SECRET", "CREDENTIAL")
+    environment = {}
+    for key, value in os.environ.items():
+        upper = key.upper()
+        if any(marker in upper for marker in credential_markers):
+            continue
+        if upper in exact or upper.startswith(prefixes):
+            environment[key] = value
     environment["PYTHONIOENCODING"] = "utf-8"
     return environment
 
@@ -295,7 +313,17 @@ def _run_worker(
     return _run_worker_impl(name, args, kwargs, timeout_seconds=timeout_seconds)
 
 
-async def _run_worker_async(
+def _native_async_lock() -> asyncio.Lock:
+    loop = asyncio.get_running_loop()
+    with _NATIVE_LOCKS_GUARD:
+        lock = _NATIVE_LOCKS.get(loop)
+        if lock is None:
+            lock = asyncio.Lock()
+            _NATIVE_LOCKS[loop] = lock
+        return lock
+
+
+async def _run_worker_async_unlocked(
     name: str,
     args: list | tuple,
     kwargs: dict,
@@ -330,20 +358,85 @@ async def _run_worker_async(
         raise
 
 
+async def _run_worker_async(
+    name: str,
+    args: list | tuple,
+    kwargs: dict,
+    *,
+    timeout_seconds: int | None = None,
+    resource_class: str | None = None,
+) -> dict[str, typing.Any]:
+    """Run one worker and update content-free process telemetry."""
+    started = time.monotonic()
+    outcome: dict[str, typing.Any] | None = None
+    error_code: str | None = None
+    telemetry.worker_started(name)
+    waiting = False
+    try:
+        if resource_class == "chemdraw_com":
+            telemetry.native_wait_started()
+            waiting = True
+            try:
+                async with _native_async_lock():
+                    telemetry.native_wait_finished()
+                    waiting = False
+                    telemetry.native_active_started()
+                    try:
+                        outcome = await _run_worker_async_unlocked(
+                            name,
+                            args,
+                            kwargs,
+                            timeout_seconds=timeout_seconds,
+                        )
+                    finally:
+                        telemetry.native_active_finished()
+            finally:
+                if waiting:
+                    telemetry.native_wait_finished()
+                    waiting = False
+        else:
+            outcome = await _run_worker_async_unlocked(
+                name,
+                args,
+                kwargs,
+                timeout_seconds=timeout_seconds,
+            )
+        if not outcome["ok"]:
+            error = outcome.get("error")
+            if isinstance(error, dict):
+                error_code = str(error.get("code") or "worker_failed")
+        return outcome
+    except asyncio.CancelledError:
+        error_code = "tool_cancelled"
+        raise
+    except Exception:
+        error_code = "worker_failed"
+        raise
+    finally:
+        telemetry.worker_finished(
+            name,
+            duration_seconds=time.monotonic() - started,
+            ok=bool(outcome and outcome.get("ok")),
+            error_code=error_code,
+        )
+
+
 def _adapt_tool(
     name: str,
     function: typing.Callable,
     *,
     return_json_text: bool = False,
     timeout_seconds: int | None = None,
+    resource_class: str | None = None,
 ) -> typing.Callable:
     """Preserve source parameters while routing execution through a worker."""
 
     @functools.wraps(function)
     async def invoke(*args, **kwargs):
-        outcome = await _run_worker_async(
-            name, args, kwargs, timeout_seconds=timeout_seconds
-        )
+        options = {"timeout_seconds": timeout_seconds}
+        if resource_class is not None:
+            options["resource_class"] = resource_class
+        outcome = await _run_worker_async(name, args, kwargs, **options)
         if not outcome["ok"]:
             raise RuntimeError(json.dumps(outcome, indent=2))
         result = outcome["result"]
@@ -371,10 +464,151 @@ def _adapt_tool(
     return invoke
 
 
-def build_server():
+class ApiKeyMiddleware:
+    """Require a bearer token without placing it in logs or worker environments."""
+
+    def __init__(
+        self,
+        app: typing.Callable,
+        token: str,
+        *,
+        public_paths: set[str] | None = None,
+    ):
+        self.app = app
+        self._token = token.encode("utf-8")
+        self._public_paths = frozenset(public_paths or set())
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http" or scope.get("path") in self._public_paths:
+            await self.app(scope, receive, send)
+            return
+        authorization = b""
+        for name, value in scope.get("headers", []):
+            if name.lower() == b"authorization":
+                authorization = value
+                break
+        expected = b"Bearer " + self._token
+        if not hmac.compare_digest(authorization, expected):
+            body = b'{"error":"unauthorized"}'
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 401,
+                    "headers": [
+                        (b"content-type", b"application/json"),
+                        (b"content-length", str(len(body)).encode("ascii")),
+                        (b"www-authenticate", b"Bearer"),
+                        (b"cache-control", b"no-store"),
+                    ],
+                }
+            )
+            await send({"type": "http.response.body", "body": body})
+            return
+        await self.app(scope, receive, send)
+
+
+def _is_loopback_host(host: str) -> bool:
+    candidate = host.strip().strip("[]").lower()
+    if candidate in _LOOPBACK_HOSTS:
+        return True
+    try:
+        return ipaddress.ip_address(candidate).is_loopback
+    except ValueError:
+        return False
+
+
+def _validated_patterns(values: list[str], label: str) -> list[str]:
+    patterns = []
+    for value in values:
+        pattern = str(value).strip()
+        if not pattern or any(character.isspace() for character in pattern):
+            raise ValueError(f"{label} values must be non-empty patterns without whitespace")
+        if pattern not in patterns:
+            patterns.append(pattern)
+    return patterns
+
+
+def resolve_http_configuration(
+    *,
+    host: str,
+    port: int,
+    allowed_hosts: list[str],
+    allowed_origins: list[str],
+    environ: typing.Mapping[str, str] | None = None,
+    api_key_env: str = "CHEMDRAW_MCP_HTTP_API_KEY",
+) -> dict[str, typing.Any]:
+    """Validate remote HTTP exposure and return non-secret server settings."""
+    environ = environ if environ is not None else os.environ
+    host = str(host).strip()
+    if not host:
+        raise ValueError("HTTP host must not be empty")
+    if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
+        raise ValueError("HTTP port must be an integer from 1 through 65535")
+    if not _ENVIRONMENT_NAME.fullmatch(api_key_env):
+        raise ValueError("API key environment variable name is invalid")
+    token = str(environ.get(api_key_env) or "")
+    loopback = _is_loopback_host(host)
+    if not loopback and not token:
+        raise ValueError(
+            f"Remote Streamable HTTP requires an API key in {api_key_env}"
+        )
+    if token and len(token.encode("utf-8")) < 32:
+        raise ValueError("HTTP API key must contain at least 32 UTF-8 bytes")
+    validated_hosts = _validated_patterns(allowed_hosts, "allowed host")
+    validated_origins = _validated_patterns(allowed_origins, "allowed origin")
+    if not validated_hosts:
+        if loopback:
+            validated_hosts = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
+        elif host not in {"0.0.0.0", "::"}:
+            validated_hosts = [f"{host}:*"]
+        else:
+            raise ValueError(
+                "Wildcard remote listening requires at least one explicit allowed host"
+            )
+    if not validated_origins and loopback:
+        validated_origins = [
+            "http://127.0.0.1:*",
+            "http://localhost:*",
+            "http://[::1]:*",
+        ]
+    return {
+        "host": host,
+        "port": port,
+        "api_key": token or None,
+        "api_key_env": api_key_env,
+        "allowed_hosts": validated_hosts,
+        "allowed_origins": validated_origins,
+        "loopback": loopback,
+    }
+
+
+def _register_observability_routes(mcp, *, tool_count: int) -> None:
+    from starlette.responses import JSONResponse, PlainTextResponse
+
+    @mcp.custom_route("/health", methods=["GET"], include_in_schema=False)
+    async def health(_request):
+        return JSONResponse(
+            telemetry.health_snapshot(tool_count=tool_count),
+            headers={"Cache-Control": "no-store"},
+        )
+
+    @mcp.custom_route("/metrics", methods=["GET"], include_in_schema=False)
+    async def metrics(_request):
+        return PlainTextResponse(
+            telemetry.render_prometheus(),
+            media_type="text/plain; version=0.0.4",
+            headers={"Cache-Control": "no-store"},
+        )
+
+
+def build_server(**server_settings):
     server_type = mcp_compat.server_class()
-    mcp = server_type("cdxml-toolkit", instructions=upstream.mcp.instructions)
-    for spec in build_registry().values():
+    registry = build_registry()
+    telemetry.configure_tools(registry)
+    mcp = server_type(
+        "cdxml-toolkit", instructions=upstream.mcp.instructions, **server_settings
+    )
+    for spec in registry.values():
         mcp.tool(
             name=spec.name,
             title=spec.title,
@@ -387,13 +621,99 @@ def build_server():
                 spec.function,
                 return_json_text=spec.return_json_text,
                 timeout_seconds=spec.timeout_seconds,
+                resource_class=spec.resource_class,
             )
         )
+    _register_observability_routes(mcp, tool_count=len(registry))
     return mcp
 
 
-def main() -> None:
-    build_server().run(transport="stdio")
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--transport",
+        choices=("stdio", "streamable-http"),
+        default=os.environ.get("CHEMDRAW_MCP_TRANSPORT", "stdio"),
+    )
+    parser.add_argument("--host", default=os.environ.get("CHEMDRAW_MCP_HTTP_HOST", "127.0.0.1"))
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=_positive_env_int("CHEMDRAW_MCP_HTTP_PORT", 8029),
+    )
+    parser.add_argument("--allowed-host", action="append", default=[])
+    parser.add_argument("--allowed-origin", action="append", default=[])
+    parser.add_argument("--api-key-env", default="CHEMDRAW_MCP_HTTP_API_KEY")
+    parser.add_argument("--mcp-path", default="/mcp")
+    parser.add_argument("--stateless-http", action="store_true")
+    parser.add_argument("--json-response", action="store_true")
+    parser.add_argument(
+        "--log-level",
+        choices=("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"),
+        default="INFO",
+    )
+    return parser.parse_args(argv)
+
+
+def build_http_app(args: argparse.Namespace, *, environ=None):
+    configuration = resolve_http_configuration(
+        host=args.host,
+        port=args.port,
+        allowed_hosts=args.allowed_host,
+        allowed_origins=args.allowed_origin,
+        environ=environ,
+        api_key_env=args.api_key_env,
+    )
+    if not isinstance(args.mcp_path, str) or not args.mcp_path.startswith("/"):
+        raise ValueError("MCP HTTP path must begin with /")
+    from mcp.server.transport_security import TransportSecuritySettings
+
+    transport_security = TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=configuration["allowed_hosts"],
+        allowed_origins=configuration["allowed_origins"],
+    )
+    mcp = build_server(
+        host=configuration["host"],
+        port=configuration["port"],
+        streamable_http_path=args.mcp_path,
+        stateless_http=bool(args.stateless_http),
+        json_response=bool(args.json_response),
+        log_level=args.log_level,
+        transport_security=transport_security,
+    )
+    app = mcp.streamable_http_app()
+    if configuration["api_key"]:
+        app = ApiKeyMiddleware(
+            app,
+            configuration["api_key"],
+            public_paths={"/health"},
+        )
+    return mcp, app, configuration
+
+
+def run_streamable_http(args: argparse.Namespace) -> None:
+    import uvicorn
+
+    _mcp, app, configuration = build_http_app(args)
+    server = uvicorn.Server(
+        uvicorn.Config(
+            app,
+            host=configuration["host"],
+            port=configuration["port"],
+            log_level=args.log_level.lower(),
+            access_log=False,
+        )
+    )
+    server.run()
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = parse_args(argv)
+    if args.transport == "stdio":
+        build_server().run(transport="stdio")
+        return
+    run_streamable_http(args)
 
 
 if __name__ == "__main__":

@@ -14,6 +14,8 @@ Load for CDX/CDXML conversion, native rendering, ChemScript operations, editable
 - Create a new Office file with one editable object: MCP `embed_cdxml_in_office`; it rejects existing Office targets.
 - Create a PPTX/DOCX collection: MCP `batch_embed_cdxml_in_office`.
 - Fill a template manifest: MCP `fill_office_template`.
+- Inspect the installed ChemScript API: MCP `inspect_chemscript_sdk`.
+- Run an audited SDK operation sequence: MCP `execute_chemscript_sdk`.
 - Python conversion: `chemdraw.cdx_converter.convert_file` or `batch_convert_files`.
 - Python rendering: `chemdraw.cdxml_to_image.cdxml_to_image`.
 
@@ -35,6 +37,19 @@ ChemDraw COM may fail when registration is missing, documents are locked, unsupp
 - `office.doc_from_template`: manifest loading and two-pass text/OLE replacement.
 - `chemdraw.cdxml_to_image_rdkit`: simple-molecule diagnostic fallback only.
 
+### ChemScript SDK Coverage
+
+`inspect_chemscript_sdk` reflects the managed assembly selected by the local ChemScript configuration. The result distinguishes two measurements:
+
+- `catalog_percent`: every SDK-declared public type, constructor, method overload, property, field, and event has a record.
+- `execution_path_percent`: every ordinary public SDK member has a matching declarative operation.
+
+The current local ChemScript 22.0 assembly reports 85 public types and 3029 public members; these values are runtime evidence and may differ with another ChemDraw release. Do not hard-code them in callers. Generated SWIG pointer, `HandleRef`, and `IntPtr` members remain in the catalog as `interop_infrastructure`. Their explicit isolated-process option is for SDK auditing only and may terminate the worker if the caller supplies an invalid native address.
+
+`execute_chemscript_sdk` accepts only `construct`, `call_static`, `call`, `get`, `set`, `get_index`, `set_index`, `iterate`, `dispose`, and `release`. Results can be named with `as` and referenced later with `{"$ref": "name"}`. Typed arguments support enums, byte arrays, arrays, default values, and, when separately enabled, `IntPtr`/`HandleRef`. There is no Python expression evaluation.
+
+File readers/writers and `LoadFile`/`ReadFile`/`WriteFile` require `allow_file_io=true`. Existing file replacement additionally requires `allow_overwrite=true`. The runtime loads the configured assembly name dynamically, so APIs such as `LargestCommonSubstructure.Compute` do not depend on a version-specific `CambridgeSoft.ChemScript16` import.
+
 ## Do Not Use Directly
 
-Do not call `_chemscript_server` commands, construct CFB/OLE bytes ad hoc, or claim full GUI automation. Do not use RDKit fallback as the final fidelity check for reactions or Office output.
+Do not call `_chemscript_server` commands, construct CFB/OLE bytes ad hoc, or claim full GUI automation. Do not use RDKit fallback as the final fidelity check for reactions or Office output. Catalog coverage does not mean that every SDK overload has been chemically validated with every possible input; inspect outputs and use real fixtures for the intended operation.

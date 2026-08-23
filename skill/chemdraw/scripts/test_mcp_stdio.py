@@ -63,7 +63,7 @@ class MCPStdioTests(unittest.TestCase):
             expected_protocol,
         )
         by_name = {tool.name: tool for tool in tools}
-        self.assertEqual(len(by_name), 30)
+        self.assertEqual(len(by_name), 34)
         self.assertIn("inspect_chemdraw_objects_in_office", by_name)
         self.assertIn("replace_chemdraw_objects_in_office", by_name)
         self.assertIn("resolve_name", by_name)
@@ -71,6 +71,10 @@ class MCPStdioTests(unittest.TestCase):
         self.assertIn("extract_structures_via_decimer_api", by_name)
         self.assertIn("clean_scheme_layout", by_name)
         self.assertIn("diagnose_runtime", by_name)
+        self.assertIn("compare_molecules", by_name)
+        self.assertIn("batch_compare_molecules", by_name)
+        self.assertIn("inspect_chemscript_sdk", by_name)
+        self.assertIn("execute_chemscript_sdk", by_name)
 
         self.assertEqual(
             set(_input_schema(by_name["resolve_name"]).get("required", [])),
@@ -103,6 +107,18 @@ class MCPStdioTests(unittest.TestCase):
         )["properties"]
         self.assertIn("confirm_upload", remote_properties)
         self.assertFalse(remote_properties["confirm_upload"]["default"])
+        self.assertEqual(
+            set(_input_schema(by_name["compare_molecules"]).get("required", [])),
+            {"molecule_a", "molecule_b"},
+        )
+        self.assertEqual(
+            set(_input_schema(by_name["batch_compare_molecules"]).get("required", [])),
+            {"pairs"},
+        )
+        self.assertEqual(
+            set(_input_schema(by_name["execute_chemscript_sdk"]).get("required", [])),
+            {"program"},
+        )
 
 
 if __name__ == "__main__":

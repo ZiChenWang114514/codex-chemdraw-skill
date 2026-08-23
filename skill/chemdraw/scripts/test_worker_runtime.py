@@ -61,10 +61,17 @@ class WorkerRuntimeTests(unittest.TestCase):
             "CONDA_PREFIX": r"C:\conda\envs\cdxml",
             "JAVA_HOME": r"C:\Java\jdk",
             "CHEMDRAW_EXE": r"C:\ChemDraw.exe",
+            "COMPUTERNAME": "CHEM-WORKSTATION",
+            "USERNAME": "chemist",
+            "CommonProgramFiles": r"C:\Program Files\Common Files",
+            "CHEMDRAW_MCP_HTTP_API_KEY": "must-not-cross-worker-process",
             "ANTHROPIC_AUTH_TOKEN": "must-not-cross-worker-boundary",
         }
         with mock.patch.dict(os.environ, configured, clear=False):
             environment = mcp_server._worker_environment()
+        normalized_environment = {
+            key.upper(): value for key, value in environment.items()
+        }
 
         for key in (
             "CHEMSCRIPT_DLL_DIR",
@@ -72,9 +79,13 @@ class WorkerRuntimeTests(unittest.TestCase):
             "CONDA_PREFIX",
             "JAVA_HOME",
             "CHEMDRAW_EXE",
+            "COMPUTERNAME",
+            "USERNAME",
+            "CommonProgramFiles",
         ):
-            self.assertEqual(environment[key], configured[key])
-        self.assertNotIn("ANTHROPIC_AUTH_TOKEN", environment)
+            self.assertEqual(normalized_environment[key.upper()], configured[key])
+        self.assertNotIn("ANTHROPIC_AUTH_TOKEN", normalized_environment)
+        self.assertNotIn("CHEMDRAW_MCP_HTTP_API_KEY", normalized_environment)
 
     def test_registry_marks_native_chemdraw_tools_only(self):
         import tool_registry

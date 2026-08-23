@@ -552,6 +552,22 @@ Parse SciFinder RDF and optionally enrich CAS data over the network.
 
 Segment a disconnected or multi-panel CDXML scheme into logical regions.
 
-### `diagnose_runtime(run_native_probe: bool = False, run_office_probe: bool = False) -> 'dict[str, Any]'`
+### `diagnose_runtime(run_native_probe: bool = False, run_office_probe: bool = False, run_chemscript_probe: bool = False) -> 'dict[str, Any]'`
 
 Report local runtime capabilities; native probes are explicit and temporary.
+
+### `compare_molecules(molecule_a: str, molecule_b: str, fingerprint: str = 'morgan', radius: int = 2, n_bits: int = 2048) -> 'dict[str, Any]'`
+
+Compare two molecule representations using ChemScript identity and RDKit Tanimoto fingerprints.
+
+### `batch_compare_molecules(pairs: list[dict[str, typing.Any]], fingerprint: str = 'morgan', radius: int = 2, n_bits: int = 2048) -> 'dict[str, Any]'`
+
+Compare up to 256 molecule pairs with one ChemScript bridge session.
+
+### `inspect_chemscript_sdk(query: Optional[str] = None, type_name: Optional[str] = None, include_infrastructure: bool = False, offset: int = 0, limit: int = 100, output_path: Optional[str] = None) -> 'dict[str, Any]'`
+
+Catalog every public ChemScript type/member, with filtering or a complete JSON export.
+
+### `execute_chemscript_sdk(program: list[dict[str, typing.Any]], allow_file_io: bool = False, allow_overwrite: bool = False, allow_unsafe_interop: bool = False, max_items: int = 100) -> 'dict[str, Any]'`
+
+Execute a declarative ChemScript SDK program in an isolated Python.NET process.

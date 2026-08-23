@@ -11,6 +11,13 @@ Load one section matching the user's intent. Exact signatures live only in [mcp-
 5. Call `draw_molecule` and require `metadata.chemistry_validation.status=preserved`. Compare stereocenter, E/Z, isotope, charge, and wedge metadata with the source.
 6. Call `render_to_png` for native compatibility and visual inspection. A successful PNG does not independently prove molecular identity.
 
+## Compare Molecules Or Use ChemScript
+
+1. Use `compare_molecules` for one pair or `batch_compare_molecules` for up to 256 pairs. Exact identity comes from ChemScript InChI when available; inspect both chirality-aware and connectivity-only Tanimoto values.
+2. Use `inspect_chemscript_sdk` before any lower-level SDK work. Filter by type or member name; request a JSON output only for a complete audit.
+3. Use `execute_chemscript_sdk` with a declarative sequence of SDK operations. Keep file access and replacement disabled unless the task explicitly requires them.
+4. Native SWIG pointer/handle calls require a separate explicit option and run only in the isolated SDK process. Prefer the ordinary SDK classes for chemistry work.
+
 ## Create Or Edit A Reaction
 
 1. Ground every drawn species.

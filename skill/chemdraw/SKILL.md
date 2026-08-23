@@ -1,6 +1,6 @@
 ---
 name: chemdraw
-description: Use when Codex needs ChemDraw or cdxml-toolkit to resolve, draw, edit, clean, merge, polish, parse, convert, render, recognize, analyze, or embed chemical structures and reaction schemes. Triggers include molecule names, trusted SMILES, CDX/CDXML, DECIMER/OCSR images, reaction screenshots, ELN/SciFinder RDF, LCMS/NMR, lab books, and editable ChemDraw objects in DOCX/PPTX.
+description: Use when Codex needs ChemDraw or cdxml-toolkit to resolve, compare, draw, edit, clean, merge, polish, parse, convert, render, recognize, analyze, or embed chemical structures and reaction schemes, including controlled ChemScript SDK work. Triggers include molecule names, trusted SMILES, CDX/CDXML, DECIMER/OCSR images, reaction screenshots, ELN/SciFinder RDF, LCMS/NMR, lab books, and editable ChemDraw objects in DOCX/PPTX.
 ---
 
 # ChemDraw
@@ -20,6 +20,7 @@ Use the `cdxml-toolkit` MCP server for stable operations. Preserve source files,
 Load [workflow-router.md](references/workflow-router.md), then read only the workflow matching the request:
 
 - Molecule drawing or modification
+- Molecular identity/similarity comparison or ChemScript SDK inspection
 - Reaction creation, reading, cleanup, merge, or polish
 - Local or remote image recognition
 - CDX/CDXML conversion and native rendering

@@ -12,6 +12,8 @@ mcp_compat.install_legacy_fastmcp_alias()
 
 from cdxml_toolkit.mcp_server import server as upstream
 
+from chemistry_compare import COMPARISON_TOOLS
+from chemscript_sdk import CHEMSCRIPT_SDK_TOOLS
 from extended_tools import PUBLIC_TOOLS
 from official_overrides import OFFICIAL_OVERRIDES
 from remote_tools import REMOTE_TOOLS
@@ -53,7 +55,13 @@ def _resource_class(name: str) -> str | None:
 
 
 def _tool_timeout(name: str) -> int | None:
-    return 90 if name == "modify_molecule" else None
+    return {
+        "modify_molecule": 90,
+        "compare_molecules": 120,
+        "batch_compare_molecules": 300,
+        "inspect_chemscript_sdk": 240,
+        "execute_chemscript_sdk": 300,
+    }.get(name)
 
 
 def _merge_named_tools(existing: dict, incoming: dict, *, source: str) -> dict:
@@ -99,6 +107,12 @@ def build_registry() -> dict[str, ToolSpec]:
         )
         for name, function in REMOTE_TOOLS.items()
     }
+    extended_functions = _merge_named_tools(
+        PUBLIC_TOOLS, COMPARISON_TOOLS, source="molecule comparison tools"
+    )
+    extended_functions = _merge_named_tools(
+        extended_functions, CHEMSCRIPT_SDK_TOOLS, source="ChemScript SDK tools"
+    )
     extended = {
         name: ToolSpec(
             name=name,
@@ -110,7 +124,7 @@ def build_registry() -> dict[str, ToolSpec]:
             resource_class=_resource_class(name),
             timeout_seconds=_tool_timeout(name),
         )
-        for name, function in PUBLIC_TOOLS.items()
+        for name, function in extended_functions.items()
     }
     registry = _merge_named_tools(official, remote, source="remote tools")
     return _merge_named_tools(registry, extended, source="extended tools")

@@ -94,7 +94,21 @@ function Invoke-BoundedNative {
     $effectiveCommand = $commandPath
     $effectiveArguments = @($Arguments)
     if ($extension -eq '.ps1') {
-        $effectiveCommand = Join-Path $PSHOME 'powershell.exe'
+        $pwshPath = Join-Path $PSHOME 'pwsh.exe'
+        $windowsPowerShellPath = Join-Path $PSHOME 'powershell.exe'
+        if (Test-Path -LiteralPath $pwshPath -PathType Leaf) {
+            $effectiveCommand = $pwshPath
+        } elseif (Test-Path -LiteralPath $windowsPowerShellPath -PathType Leaf) {
+            $effectiveCommand = $windowsPowerShellPath
+        } else {
+            return [pscustomobject]@{
+                ExitCode = -1
+                StdOut = ''
+                StdErr = ''
+                TimedOut = $false
+                LaunchError = 'No PowerShell host executable exists under PSHOME'
+            }
+        }
         $effectiveArguments = @(
             '-NoLogo', '-NoProfile', '-NonInteractive',
             '-ExecutionPolicy', 'Bypass', '-File', $commandPath
@@ -286,7 +300,7 @@ if ($discovery) {
     if (-not $SkipNativeChemDraw) {
         $diagnosticArguments += @('--native-probe', '--office-probe')
     }
-    $diagnosticTimeoutSeconds = 220
+    $diagnosticTimeoutSeconds = 270
     $diagnosticResult = Invoke-BoundedNative `
         -FilePath $pythonPath `
         -Arguments $diagnosticArguments `

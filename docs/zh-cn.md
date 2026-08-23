@@ -9,10 +9,13 @@
 ## 主要功能
 
 - 根据名称、SMILES、InChI 等标识解析并绘制结构。
+- 使用 ChemScript 结构标识和 RDKit 指纹比较单个分子或有限批次。
 - 清理、合并、润色、拆分和渲染 CDXML 反应式。
 - 使用本地 DECIMER，或在明确确认后调用远程图片识别。
 - 在支持的 Windows 环境中将 CDXML 嵌入 PowerPoint 和 Word。
 - 处理选定的 LCMS、SciFinder RDF 和实验记录工作流。
+- 查询并调用本机 ChemScript SDK 的全部公开接口目录。
+- 可选用带鉴权的 Streamable HTTP 向另一台电脑提供服务，并提供健康状态和 Prometheus 指标。
 
 ## 环境要求
 
@@ -44,6 +47,8 @@ codex mcp get cdxml-toolkit --json
 ```
 
 安装器只有在指定 `-Apply` 时才会写入；覆盖前会备份已有 Skill 和 MCP 配置。
+
+stdio 仍是默认模式。如需让另一台电脑调用安装了 ChemDraw 的 Windows 主机，请先阅读[项目指南中的 Streamable HTTP 配置](guide.md#streamable-http)，并优先使用加密的专用网络。
 
 ## 使用与维护
 

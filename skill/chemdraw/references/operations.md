@@ -14,6 +14,12 @@ Path precedence is explicit argument, environment variable, active Conda/current
 - `CHEMDRAW_MCP_WORKER_TIMEOUT_SECONDS`
 - `CHEMDRAW_MCP_WORKER_INPUT_BYTES`
 - `CHEMDRAW_MCP_WORKER_OUTPUT_BYTES`
+- `CHEMDRAW_MCP_TRANSPORT`
+- `CHEMDRAW_MCP_HTTP_HOST`
+- `CHEMDRAW_MCP_HTTP_PORT`
+- `CHEMDRAW_MCP_HTTP_API_KEY`
+- `CHEMSCRIPT_PYTHON`
+- `CHEMSCRIPT_CONFIG_PATH`
 
 Workers also preserve `CHEMSCRIPT_*`, `CONDA_PREFIX`, and `JAVA_HOME` so an
 explicitly configured ChemScript or Java runtime remains visible after process
@@ -23,11 +29,19 @@ Run `scripts/runtime_discovery.py` from Python when debugging discovery code. Ge
 
 ## Health And Smoke Tests
 
-Run MCP `diagnose_runtime()` for an offline, read-only capability matrix. It reports the Python runtime, installed `cdxml-toolkit` and MCP SDK distribution versions, ChemDraw discovery and COM registration, ChemScript, Java/OPSIN, Office dependencies, DECIMER markers, and live tool count without importing DECIMER or downloading weights. Set `run_native_probe=true` for a temporary CDXML-to-PNG and ChemScript probe; set `run_office_probe=true` for separate temporary PPTX and DOCX ChemDraw OLE probes. Native rendering is capped at 75 seconds and each Office stage at 60 seconds. Results include stage duration, timeout, and cleanup status. Normal completion never force-terminates ChemDraw; timeout cleanup is limited to newly observed automation processes that can be attributed to the probe.
+Run MCP `diagnose_runtime()` for an offline, read-only capability matrix. It reports the Python runtime, installed `cdxml-toolkit` and MCP SDK distribution versions, ChemDraw discovery and COM registration, ChemScript, Java/OPSIN, Office dependencies, DECIMER markers, and live tool count without importing DECIMER or downloading weights. Set `run_chemscript_probe=true` for an independent bridge ping. `run_native_probe=true` runs that ping first and then a temporary CDXML-to-PNG probe, so a ChemDraw COM timeout cannot hide the ChemScript result. Set `run_office_probe=true` for separate temporary PPTX and DOCX ChemDraw OLE probes. ChemScript is capped at 30 seconds, native rendering at 75 seconds, and each Office stage at 60 seconds. Results include stage duration, timeout, and cleanup status. Normal completion never force-terminates ChemDraw; timeout cleanup is limited to newly observed automation processes that can be attributed to the probe.
 
 Run `scripts/health_check.ps1` for the complete repository gate. It consumes the same diagnostic matrix, checks Python packages, generated signatures and inventory, Skill tests, Codex MCP state, and, unless skipped, the native and Office probes. Every subprocess is time-bounded.
 
 Run `scripts/smoke_test.py --output-dir <directory>` for name resolution, editable aspirin CDXML, native ChemDraw PNG rendering, and raster validation.
+
+## Streamable HTTP And Metrics
+
+`scripts/mcp_server.py` uses stdio unless `--transport streamable-http` is supplied. HTTP defaults to `127.0.0.1:8029`. Non-loopback listening requires `CHEMDRAW_MCP_HTTP_API_KEY`; wildcard listening additionally requires `--allowed-host`. The key must contain at least 32 UTF-8 bytes, remains in the parent server, and is removed from every worker environment. Use the standard `Authorization: Bearer ...` header.
+
+`/health` is intentionally public and returns only uptime, registered tool count, active worker count, and local ChemDraw scheduler state. `/metrics` uses Prometheus text format and requires the bearer token when HTTP authentication is enabled. It records tool duration, hard timeouts, stable worker failure codes, active workers, and the local ChemDraw queue. It never records arguments, molecule strings, filenames, document content, outputs, or credentials.
+
+The parent process schedules one local ChemDraw COM worker at a time and reports callers waiting there. The named per-user mutex remains active inside each worker to coordinate with another local server process.
 
 ## DECIMER
 

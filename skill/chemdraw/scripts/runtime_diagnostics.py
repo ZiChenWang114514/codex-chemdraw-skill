@@ -26,8 +26,9 @@ from process_control import (
 
 
 NATIVE_PROBE_TIMEOUT_SECONDS = 75
+CHEMSCRIPT_PROBE_TIMEOUT_SECONDS = 30
 OFFICE_PROBE_TIMEOUT_SECONDS = 60
-PROBE_HARD_LIMIT_SECONDS = 210
+PROBE_HARD_LIMIT_SECONDS = 240
 
 
 def _status(available: bool, **details: Any) -> dict[str, Any]:
@@ -158,32 +159,40 @@ def _native_probe() -> dict[str, Any]:
             image.verify()
         with Image.open(png) as image:
             dimensions = list(image.size)
-        bridge = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "cdxml_toolkit.chemdraw.chemscript_bridge",
-                "ping",
-            ],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=30,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-        )
         return {
             "status": "available",
             "cdxml_bytes": cdxml.stat().st_size,
             "png_bytes": png.stat().st_size,
             "png_dimensions": dimensions,
-            "chemscript_status": (
-                "available" if bridge.returncode == 0 else "missing"
-            ),
-            "chemscript_detail": (
-                bridge.stdout.strip() or bridge.stderr.strip()
-            )[:1000],
         }
+
+
+def _chemscript_probe() -> dict[str, Any]:
+    bridge = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "cdxml_toolkit.chemdraw.chemscript_bridge",
+            "ping",
+        ],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=25,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
+    detail = (bridge.stdout.strip() or bridge.stderr.strip())[:1000]
+    return {
+        "status": "available" if bridge.returncode == 0 else "missing",
+        "detail": detail or (
+            "ChemScript bridge ping succeeded"
+            if bridge.returncode == 0
+            else "ChemScript bridge ping failed"
+        ),
+        "returncode": bridge.returncode,
+    }
 
 
 def _office_probe(suffix: str | None = None) -> dict[str, Any]:
@@ -239,6 +248,8 @@ def _run_probe(probe) -> dict[str, Any]:
 
 
 def _probe_stage(stage: str) -> dict[str, Any]:
+    if stage == "chemscript":
+        return _run_probe(_chemscript_probe)
     if stage == "native":
         return _run_probe(_native_probe)
     if stage == "pptx":
@@ -407,6 +418,7 @@ def _not_run_stage(stage: str, reason: str) -> dict[str, Any]:
 def diagnose_runtime(
     run_native_probe: bool = False,
     run_office_probe: bool = False,
+    run_chemscript_probe: bool = False,
 ) -> dict[str, Any]:
     """Report local runtime capabilities; native probes are explicit and temporary."""
     capabilities: dict[str, Any] = {
@@ -444,20 +456,22 @@ def diagnose_runtime(
 
     requested = []
     cleanup_confirmed = True
+    if run_native_probe or run_chemscript_probe:
+        capabilities["chemscript_probe"] = _run_probe_stage(
+            "chemscript", CHEMSCRIPT_PROBE_TIMEOUT_SECONDS
+        )
+        chemscript = capabilities["chemscript_probe"]
+        capabilities["chemscript"] = _status(
+            chemscript.get("status") == "available",
+            detail=chemscript.get("detail") or "ChemScript bridge ping failed",
+        )
+        requested.append("chemscript_probe")
     if run_native_probe:
         capabilities["native_probe"] = _run_probe_stage(
             "native", NATIVE_PROBE_TIMEOUT_SECONDS
         )
         native = capabilities["native_probe"]
         cleanup_confirmed = native.get("cleanup", {}).get("status") == "confirmed"
-        if native.get("chemscript_status") == "available":
-            capabilities["chemscript"] = _status(
-                True, detail=native.get("chemscript_detail") or "Bridge ping succeeded"
-            )
-        elif native.get("chemscript_status") == "missing":
-            capabilities["chemscript"] = _status(
-                False, detail=native.get("chemscript_detail") or "Bridge ping failed"
-            )
         requested.append("native_probe")
     if run_office_probe:
         if cleanup_confirmed:
@@ -498,7 +512,9 @@ def diagnose_runtime(
         "outputs": {"capabilities": capabilities},
         "warnings": warnings,
         "metadata": {
-            "read_only": not (run_native_probe or run_office_probe),
+            "read_only": not (
+                run_native_probe or run_office_probe or run_chemscript_probe
+            ),
             "network_used": False,
             "tool_count": tool_count,
             "probe_hard_limit_seconds": PROBE_HARD_LIMIT_SECONDS,
@@ -509,8 +525,11 @@ def diagnose_runtime(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--native-probe", action="store_true")
+    parser.add_argument("--chemscript-probe", action="store_true")
     parser.add_argument("--office-probe", action="store_true")
-    parser.add_argument("--probe-stage", choices=("native", "pptx", "docx"))
+    parser.add_argument(
+        "--probe-stage", choices=("chemscript", "native", "pptx", "docx")
+    )
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
     if args.probe_stage:
@@ -518,7 +537,11 @@ def main() -> int:
             result = _probe_stage(args.probe_stage)
         print(json.dumps(result, separators=(",", ":")))
         return 0 if result.get("status") == "available" else 1
-    result = diagnose_runtime(args.native_probe, args.office_probe)
+    result = diagnose_runtime(
+        args.native_probe,
+        args.office_probe,
+        args.chemscript_probe,
+    )
     if args.json:
         print(json.dumps(result, indent=2))
     else:

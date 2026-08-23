@@ -9,11 +9,14 @@ This is an independent community project. It is not affiliated with or endorsed 
 ## Capabilities
 
 - Resolve names, SMILES, InChI, and common structure identifiers.
+- Compare single molecules or bounded batches with ChemScript identity and RDKit fingerprints.
 - Draw and edit structures and reaction schemes as CDXML.
 - Clean, merge, polish, segment, and render ChemDraw documents.
 - Convert images with local DECIMER models or an explicitly confirmed remote request.
 - Embed CDXML objects in PowerPoint and Word files on supported Windows systems.
 - Discover experiment files and process selected LCMS, RDF, and lab-book workflows.
+- Inspect and execute the installed public ChemScript SDK through a controlled, isolated program.
+- Optionally serve the same tools over authenticated Streamable HTTP with health and Prometheus endpoints.
 
 ## Requirements
 
@@ -47,6 +50,8 @@ codex mcp get cdxml-toolkit --json
 ```
 
 The installer is read-only unless `-Apply` is supplied. Existing Skill and MCP configuration files are backed up before replacement.
+
+stdio remains the default. For a ChemDraw workstation shared through a private network, see the authenticated [Streamable HTTP setup](docs/guide.md#streamable-http) before exposing a listening port.
 
 ## Documentation
 

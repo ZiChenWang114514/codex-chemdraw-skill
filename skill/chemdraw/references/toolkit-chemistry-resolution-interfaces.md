@@ -10,12 +10,15 @@ Load for chemical-name resolution, CAS lookup, formula/MW validation, reagent ab
 - Modify a validated molecule: MCP `modify_molecule`.
 - Draw grounded SMILES: MCP `draw_molecule`.
 - Search collections: MCP `search_compound`.
+- Compare molecular identity and similarity: MCP `compare_molecules` or `batch_compare_molecules`.
 - Python CAS resolution: `resolve.cas_resolver` high-level resolvers.
 - Python naming support: curated reagent database and name decomposition modules.
 
 ## Inputs And Outputs
 
 Accept a user-provided trusted SMILES or a resolver result. Verify canonical identity, formula, molecular weight, and source before drawing. Molecular modification must include an MCS-based before/after diff. `draw_molecule` repairs missing RDKit wedge annotations, validates connectivity, Kekule bond orders, isotopes, charges, specified tetrahedral centers, and E/Z geometry, then returns the result in `metadata.chemistry_validation`.
+
+Comparison first resolves each representation or supported structure file through `ChemScriptBridge.get_info`. Exact identity uses ChemScript InChI when both values are present. RDKit calculates a chirality-aware fingerprint similarity and a connectivity-only value; a connectivity value of 1.0 with unequal identity is a prompt to inspect stereo, isotopes, charge, or tautomer state. Batch results omit the original representations and continue after a per-pair parsing failure.
 
 ## Failure Modes
 
