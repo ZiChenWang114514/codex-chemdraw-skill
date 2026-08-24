@@ -14,6 +14,7 @@ class DistributionTests(unittest.TestCase):
     def test_required_repository_files_exist(self) -> None:
         required = [
             "README.md",
+            "README.zh-cn.md",
             "LICENSE",
             "AGENTS.md",
             ".gitignore",
@@ -24,6 +25,7 @@ class DistributionTests(unittest.TestCase):
             ".github/ISSUE_TEMPLATE/bug_report.yml",
             ".github/ISSUE_TEMPLATE/feature_request.yml",
             "docs/guide.md",
+            "docs/guide.zh-cn.md",
             "docs/zh-cn.md",
             "scripts/check_prerequisites.ps1",
             "scripts/install.ps1",
@@ -34,7 +36,7 @@ class DistributionTests(unittest.TestCase):
 
     def test_root_markdown_is_minimal(self) -> None:
         root_markdown = {path.name for path in ROOT.glob("*.md")}
-        self.assertEqual(root_markdown, {"README.md", "AGENTS.md"})
+        self.assertEqual(root_markdown, {"README.md", "README.zh-cn.md", "AGENTS.md"})
 
     def test_repository_documentation_is_consolidated(self) -> None:
         repository_markdown = {
@@ -46,10 +48,12 @@ class DistributionTests(unittest.TestCase):
             repository_markdown,
             {
                 "README.md",
+                "README.zh-cn.md",
                 "AGENTS.md",
                 ".github/contributing.md",
                 ".github/SECURITY.md",
                 "docs/guide.md",
+                "docs/guide.zh-cn.md",
                 "docs/zh-cn.md",
             },
         )

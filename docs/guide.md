@@ -1,5 +1,7 @@
 # Project Guide
 
+[简体中文](guide.zh-cn.md)
+
 This is the single detailed guide for installing, understanding, testing, and operating the project. The root README stays intentionally short.
 
 ## Installation
