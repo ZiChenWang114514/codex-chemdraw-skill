@@ -7,15 +7,18 @@
 Turn chemistry requests into editable CDXML, native ChemDraw renders, molecule comparisons, recognition candidates, and Office-embedded structures through one Codex Skill and MCP server.
 
 <p align="center">
-  <a href="docs/zh-cn.md">简体中文</a> ·
-  <a href="docs/guide.md#first-time-windows-setup">Installation</a> ·
-  <a href="skill/chemdraw/references/workflow-router.md">Workflow catalog</a> ·
-  <a href=".github/SECURITY.md">Security</a>
+  <a href="docs/zh-cn.md"><img src="https://img.shields.io/badge/-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-007c83?style=flat" height="22" alt="简体中文"></a>&nbsp;
+  <a href="docs/guide.md#first-time-windows-setup"><img src="https://img.shields.io/badge/-Installation-17242b?style=flat" height="22" alt="Installation"></a>&nbsp;
+  <a href="skill/chemdraw/references/workflow-router.md"><img src="https://img.shields.io/badge/-Workflow%20catalog-007c83?style=flat" height="22" alt="Workflow catalog"></a>&nbsp;
+  <a href=".github/SECURITY.md"><img src="https://img.shields.io/badge/-Security-d94f70?style=flat" height="22" alt="Security"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/ZiChenWang114514/codex-chemdraw-skill/actions/workflows/validate.yml"><img src="https://github.com/ZiChenWang114514/codex-chemdraw-skill/actions/workflows/validate.yml/badge.svg" height="20" alt="Validate workflow status"></a>
-  &nbsp;&nbsp; Windows 10/11 · Python 3.10-3.13 · MCP 2.0 tested · <a href="LICENSE">MIT</a>
+  <a href="https://github.com/ZiChenWang114514/codex-chemdraw-skill/actions/workflows/validate.yml"><img src="https://github.com/ZiChenWang114514/codex-chemdraw-skill/actions/workflows/validate.yml/badge.svg?style=flat" height="22" alt="Validate workflow status"></a>&nbsp;
+  <img src="https://img.shields.io/badge/-Windows%2010%2F11-0078D4?style=flat&amp;logo=windows11&amp;logoColor=white" height="22" alt="Windows 10 and 11">&nbsp;
+  <img src="https://img.shields.io/badge/-Python%203.10--3.13-3776AB?style=flat&amp;logo=python&amp;logoColor=white" height="22" alt="Python 3.10 through 3.13">&nbsp;
+  <img src="https://img.shields.io/badge/-MCP%202.0%20tested-17242b?style=flat" height="22" alt="MCP 2.0 tested">&nbsp;
+  <a href="LICENSE"><img src="https://img.shields.io/badge/-MIT-d94f70?style=flat" height="22" alt="MIT License"></a>
 </p>
 
 ## From Request to Checked Artifact
