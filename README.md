@@ -1,6 +1,8 @@
 # Codex ChemDraw Skill
 
-**Controlled ChemDraw and CDXML workflows for Codex on Windows.**
+<p align="center">
+  <img src="./assets/readme/hero.svg" width="100%" alt="Codex ChemDraw Skill: controlled CDXML workflows from a chemistry request to a checked native ChemDraw artifact">
+</p>
 
 Turn chemistry requests into editable CDXML, native ChemDraw renders, molecule comparisons, recognition candidates, and Office-embedded structures through one Codex Skill and MCP server.
 
