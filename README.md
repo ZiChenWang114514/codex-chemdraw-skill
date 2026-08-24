@@ -6,11 +6,17 @@
 
 Turn chemistry requests into editable CDXML, native ChemDraw renders, molecule comparisons, recognition candidates, and Office-embedded structures through one Codex Skill and MCP server.
 
-[简体中文](docs/zh-cn.md) · [Installation](docs/guide.md#first-time-windows-setup) · [Workflow catalog](skill/chemdraw/references/workflow-router.md) · [Security](.github/SECURITY.md)
+<p align="center">
+  <a href="docs/zh-cn.md">简体中文</a> ·
+  <a href="docs/guide.md#first-time-windows-setup">Installation</a> ·
+  <a href="skill/chemdraw/references/workflow-router.md">Workflow catalog</a> ·
+  <a href=".github/SECURITY.md">Security</a>
+</p>
 
-[![Validate](https://github.com/ZiChenWang114514/codex-chemdraw-skill/actions/workflows/validate.yml/badge.svg)](https://github.com/ZiChenWang114514/codex-chemdraw-skill/actions/workflows/validate.yml)
-
-`Windows 10/11` · `Python 3.10-3.13` · `MCP 2.0 tested` · [MIT](LICENSE)
+<p align="center">
+  <a href="https://github.com/ZiChenWang114514/codex-chemdraw-skill/actions/workflows/validate.yml"><img src="https://github.com/ZiChenWang114514/codex-chemdraw-skill/actions/workflows/validate.yml/badge.svg" height="20" alt="Validate workflow status"></a>
+  &nbsp;&nbsp; Windows 10/11 · Python 3.10-3.13 · MCP 2.0 tested · <a href="LICENSE">MIT</a>
+</p>
 
 ## From Request to Checked Artifact
 
