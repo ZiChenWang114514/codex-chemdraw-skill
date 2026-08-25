@@ -18,7 +18,7 @@ class PrerequisiteCheckerTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.shell = shutil.which("pwsh") or shutil.which("powershell")
         if cls.shell is None:
-            raise unittest.SkipTest("PowerShell is required for this Windows-first project")
+            raise unittest.SkipTest("PowerShell is required to test the supplied checker")
 
     def _run(self, *arguments: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
@@ -51,7 +51,9 @@ class PrerequisiteCheckerTests(unittest.TestCase):
 
         self.assertEqual(report["schema_version"], 1)
         self.assertTrue(report["ok"])
+        self.assertEqual(report["selected_capabilities"], ["core"])
         self.assertEqual(checks["windows"]["status"], "pass")
+        self.assertFalse(checks["windows"]["required"])
         self.assertIn("64-bit", checks["windows"]["detail"])
         self.assertEqual(checks["powershell"]["status"], "pass")
         self.assertEqual(checks["python_runtime"]["status"], "pass")

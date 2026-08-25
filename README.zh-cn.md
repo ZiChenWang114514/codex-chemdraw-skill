@@ -15,9 +15,9 @@
 
 <p align="center">
   <a href="https://github.com/ZiChenWang114514/codex-chemdraw-skill/actions/workflows/validate.yml"><img src="https://github.com/ZiChenWang114514/codex-chemdraw-skill/actions/workflows/validate.yml/badge.svg?style=flat" height="22" alt="验证工作流状态"></a>&nbsp;
-  <img src="https://img.shields.io/badge/-Windows%2010%2F11-0078D4?style=flat&amp;logo=windows11&amp;logoColor=white" height="22" alt="Windows 10 和 11">&nbsp;
+  <img src="https://img.shields.io/badge/-%E6%A0%B8%E5%BF%83%EF%BC%9AWindows%20%7C%20macOS%20%7C%20Linux-007c83?style=flat" height="22" alt="可移植核心支持 Windows、macOS 和 Linux">&nbsp;
   <img src="https://img.shields.io/badge/-Python%203.10--3.13-3776AB?style=flat&amp;logo=python&amp;logoColor=white" height="22" alt="Python 3.10 至 3.13">&nbsp;
-  <img src="https://img.shields.io/badge/-MCP%202.0%20tested-17242b?style=flat" height="22" alt="已测试 MCP 2.0">&nbsp;
+  <img src="https://img.shields.io/badge/-MCP%201.x%20%7C%202.x%20tested-17242b?style=flat" height="22" alt="已测试 MCP 1.x 和 2.x">&nbsp;
   <a href="LICENSE"><img src="https://img.shields.io/badge/-MIT-d94f70?style=flat" height="22" alt="MIT 许可证"></a>
 </p>
 
@@ -57,13 +57,13 @@ PNG，然后报告绝对路径和化学检查结果。
 - **ChemScript SDK：** 检查已安装的公共目录，并在独立工作进程中执行受支持的声明式调用。进程隔离可限制停滞调用造成的影响，但不提供操作系统级安全沙箱。
 - **远程工作站访问：** 保持 stdio 为默认模式，或通过可选的 Streamable HTTP 向外提供 Windows 主机服务，并包含健康状态与 Prometheus 端点。
 
-本项目审计了 `cdxml-toolkit` 的 449 个公共符号。该数字表示工具包清单，并不表示 MCP 工具数量。完整的 ChemScript 公共目录覆盖意味着该界面能够发现并报告相关成员；能否成功执行仍取决于已安装的 SDK、许可证、体系结构以及各成员的具体行为。
+本项目审计了 `cdxml-toolkit-community` 的 584 个公共符号。该数字表示工具包清单，并不表示 Codex MCP 配置中的 35 个工具。完整的 ChemScript 公共目录覆盖意味着该界面能够发现并报告相关成员；能否成功执行仍取决于已安装的 SDK、许可证、体系结构以及各成员的具体行为。
 
 ## 选择所需组件
 
 | 目标 | 在核心安装基础上增加 |
 | --- | --- |
-| 创建和编辑 CDXML | Codex、64 位 Python 3.10-3.13、`mcp==2.0.0` 和 `cdxml-toolkit==0.5.17` |
+| 创建和编辑 CDXML | Codex、64 位 Python 3.10-3.13、MCP 1.x 或 2.x，以及 `cdxml-toolkit-community==0.7.0a1`；可在 Windows、macOS 和 Linux 上运行 |
 | 原生 PNG、CDX 或 ChemDraw 清理 | 已获得许可并激活的 Windows 桌面版 ChemDraw，且 COM 自动化可正常工作 |
 | 分子比较或 ChemScript SDK 调用 | 与所选工作进程运行时兼容的已安装 ChemScript DLL |
 | 可编辑的 Word 或 PowerPoint 对象 | 受支持的桌面版 Microsoft Word 和/或 PowerPoint |
@@ -83,25 +83,26 @@ Set-Location .\codex-chemdraw-skill
 conda create -n cdxml python=3.12 pip -y
 $python = (conda run -n cdxml python -c "import sys; print(sys.executable)" | Select-Object -Last 1).Trim()
 conda run -n cdxml python -m pip install --upgrade pip
-conda run -n cdxml python -m pip install "mcp==2.0.0" "cdxml-toolkit==0.5.17"
+conda run -n cdxml python -m pip install `
+  "cdxml-toolkit-community[windows,office,chemscript] @ git+https://github.com/ZiChenWang114514/cdxml-toolkit-community.git@v0.7.0a1"
 
 Set-ExecutionPolicy -Scope Process Bypass
-& .\scripts\check_prerequisites.ps1 -Python $python
+& .\scripts\check_prerequisites.ps1 -Python $python -Capabilities core,native,chemscript,office
 & .\scripts\install.ps1 -Python $python -ConfigureMcp
 & .\scripts\install.ps1 -Python $python -Apply -ConfigureMcp
 ```
 
-如果只安装 CDXML 功能且不使用桌面版 ChemDraw，请向 `check_prerequisites.ps1` 添加 `-SkipChemDraw`。在提供 `-Apply` 之前，安装程序只会报告拟使用的路径，不会修改文件。实际安装时，程序会在替换现有 Skill 和 MCP 配置文件之前保留副本。
+如果只使用可移植 CDXML 和 RDKit 功能，请运行 `check_prerequisites.ps1 -Capabilities core`，并安装不含可选附加依赖的软件包。在提供 `-Apply` 之前，安装程序只会报告拟使用的路径，不会修改文件。实际安装时，程序会在替换现有 Skill 和 MCP 配置文件之前保留副本。
 
 重新启动 Codex，打开新的 PowerShell 会话，然后执行基础集成检查：
 
 ```powershell
 $python = (conda run -n cdxml python -c "import sys; print(sys.executable)" | Select-Object -Last 1).Trim()
 codex mcp get cdxml-toolkit --json
-& "$HOME\.codex\skills\chemdraw\scripts\check_prerequisites.ps1" -Python $python
+& "$HOME\.codex\skills\chemdraw\scripts\check_prerequisites.ps1" -Python $python -Capabilities core,native,chemscript,office
 ```
 
-仅安装 CDXML 功能时，也应在已安装的前提条件检查器中使用 `-SkipChemDraw`。随后可以尝试上面的示例请求，或按照[首次使用教程](docs/zh-cn.md#10-完成第一次使用)操作。
+仅安装可移植功能时，应在已安装的前提条件检查器中使用 `-Capabilities core`。随后可以尝试上面的示例请求，或按照[首次使用教程](docs/zh-cn.md#10-完成第一次使用)操作。
 
 <details>
 <summary><strong>执行深入验证</strong></summary>
@@ -125,7 +126,7 @@ codex mcp get cdxml-toolkit --json
 
 ## 验证与安全
 
-- 当前 GitHub Actions 工作流使用 Windows、Python 3.12、`mcp==2.0.0` 和 `cdxml-toolkit==0.5.17` 验证可移植功能。项目支持 Python 3.10-3.13；MCP SDK 1.x 作为兼容路径保留，但当前 CI 不测试该版本。
+- GitHub Actions 使用 Windows 和 Linux、Python 3.12、MCP 1.28.1 与 2.0.0，以及 `cdxml-toolkit-community==0.7.0a1` 验证可移植运行时。项目支持 Python 3.10-3.13。
 - 原生 ChemDraw、ChemScript 和 Office 功能必须在已获得许可的本地 Windows 主机上检查，因为托管 CI 不提供这些应用程序。
 - 可以使用来源身份、基于 MCS 的差异、化学元数据和原生渲染检查结构修改。科学判断与最终确认仍由用户负责。
 - 标准修改工具会创建新的输出路径，并拒绝意外替换。只有明确启用相应权限与覆盖选项后，ChemScript SDK 才能访问文件和替换现有文件。
@@ -139,7 +140,7 @@ codex mcp get cdxml-toolkit --json
 - [安装、故障处理、架构与运行维护](docs/guide.zh-cn.md)
 - [面向任务的工作流目录](skill/chemdraw/references/workflow-router.md)
 - [自动生成的 MCP 工具签名](skill/chemdraw/references/mcp-signatures.md)
-- [经过审计的 `cdxml-toolkit` 公共清单](skill/chemdraw/references/toolkit-public-inventory.md)
+- [经过审计的 `cdxml-toolkit-community` 公共清单](skill/chemdraw/references/toolkit-public-inventory.md)
 - [Streamable HTTP 配置](docs/guide.zh-cn.md#streamable-http)
 - [贡献指南](.github/contributing.md)
 - [安全策略](.github/SECURITY.md)
@@ -148,6 +149,6 @@ codex mcp get cdxml-toolkit --json
 
 ## 许可证
 
-仓库自行编写的代码与文档采用 [MIT 许可证](LICENSE)。ChemDraw、Microsoft Office、Codex、`cdxml-toolkit`、MCP Python SDK、RDKit、DECIMER 及其依赖项继续适用各自的许可证与使用条款。
+仓库自行编写的代码与文档采用 [MIT 许可证](LICENSE)。ChemDraw、Microsoft Office、Codex、`cdxml-toolkit-community`、MCP Python SDK、RDKit、DECIMER 及其依赖项继续适用各自的许可证与使用条款。
 
-本项目为独立社区项目，与 Revvity、OpenAI、Microsoft 以及 `cdxml-toolkit`、MCP Python SDK、RDKit 或 DECIMER 的维护者不存在隶属关系，也未获得其认可。
+本项目为独立社区项目，与 Revvity、OpenAI、Microsoft 以及上游 `cdxml-toolkit`、MCP Python SDK、RDKit 或 DECIMER 的维护者不存在隶属关系，也未获得其认可。

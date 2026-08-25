@@ -6,7 +6,7 @@ Contributions should keep the Skill focused, portable, and verifiable on a real 
 
 1. Fork and clone the repository.
 2. Create or activate a Python 3.10+ environment.
-3. Install the dependencies required by `skill/chemdraw` and `cdxml-toolkit`.
+3. Install the dependencies required by `skill/chemdraw` and `cdxml-toolkit-community`.
 4. Run the baseline validation before making changes.
 
 ```powershell

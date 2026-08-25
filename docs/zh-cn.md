@@ -13,15 +13,15 @@
 
 <p align="center">
   <a href="https://github.com/ZiChenWang114514/codex-chemdraw-skill/actions/workflows/validate.yml"><img src="https://github.com/ZiChenWang114514/codex-chemdraw-skill/actions/workflows/validate.yml/badge.svg?style=flat" height="22" alt="Validate workflow status"></a>&nbsp;
-  <img src="https://img.shields.io/badge/-Windows%2010%2F11-0078D4?style=flat&amp;logo=windows11&amp;logoColor=white" height="22" alt="Windows 10 和 11">&nbsp;
+  <img src="https://img.shields.io/badge/-%E6%A0%B8%E5%BF%83%EF%BC%9AWindows%20%7C%20macOS%20%7C%20Linux-007c83?style=flat" height="22" alt="可移植核心支持 Windows、macOS 和 Linux">&nbsp;
   <img src="https://img.shields.io/badge/-Python%203.10--3.13-3776AB?style=flat&amp;logo=python&amp;logoColor=white" height="22" alt="Python 3.10 至 3.13">&nbsp;
-  <img src="https://img.shields.io/badge/-MCP%202.0%20tested-17242b?style=flat" height="22" alt="已测试 MCP 2.0">&nbsp;
+  <img src="https://img.shields.io/badge/-MCP%201.x%20%7C%202.x%20tested-17242b?style=flat" height="22" alt="已测试 MCP 1.x 和 2.x">&nbsp;
   <a href="../LICENSE"><img src="https://img.shields.io/badge/-MIT-d94f70?style=flat" height="22" alt="MIT License"></a>
 </p>
 
-这是一个面向 Windows 的 Codex Skill 与 MCP 服务，用于调用 ChemDraw 和 `cdxml-toolkit` 完成结构绘制、反应式处理、格式转换、候选结构识别、Office 嵌入和部分实验数据工作流。项目支持 Python 3.10 至 3.13；当前托管 CI 使用 Python 3.12、MCP Python SDK 2.0.0 和 `cdxml-toolkit==0.5.17`。
+这是一个使用 `cdxml-toolkit-community` 的 Codex Skill 与 MCP 服务，可完成结构绘制、反应式处理、格式转换、候选结构识别、Office 嵌入和部分实验数据工作流。可移植核心支持 Windows、macOS 和 Linux；ChemDraw、ChemScript 与 Office 原生功能需要 Windows 主机。项目支持 Python 3.10 至 3.13，托管 CI 使用 Python 3.12 验证 MCP Python SDK 1.x 和 2.x。
 
-本项目是独立社区项目，与 Revvity、OpenAI、Microsoft 以及 `cdxml-toolkit`、MCP Python SDK、RDKit、DECIMER 的维护者没有隶属或背书关系。
+本项目是独立社区项目，与 Revvity、OpenAI、Microsoft 以及上游 `cdxml-toolkit`、MCP Python SDK、RDKit、DECIMER 的维护者没有隶属或背书关系。
 
 ## 从请求到可核验产物
 
@@ -46,7 +46,7 @@
 - 查询本机 ChemScript SDK 的公开接口目录，并在独立工作进程中执行受支持的声明式调用。进程隔离可限制超时调用造成的影响，但不提供操作系统级沙箱。
 - 可选用 Streamable HTTP 向另一台电脑提供服务，并提供健康状态和 Prometheus 指标。非本机监听必须配置 Bearer Token、允许的 `Host` 和加密网络。
 
-项目审计清单记录了 449 个 `cdxml-toolkit` 公开符号，这个数字表示工具包接口清单，并非 MCP 工具数量。ChemScript 公共目录可被发现和报告，也不表示每个成员都能在所有 SDK 版本、许可证和位数组合中成功执行。
+项目审计清单记录了 584 个 `cdxml-toolkit-community` 公开符号，这个数字表示工具包接口清单，并非 Codex MCP 配置中的 35 个工具。ChemScript 公共目录可被发现和报告，也不表示每个成员都能在所有 SDK 版本、许可证和位数组合中成功执行。
 
 ## 先判断需要哪些组件
 
@@ -54,20 +54,20 @@
 
 | 使用目标 | 需要安装的组件 |
 | --- | --- |
-| 解析名称、读取或生成 CDXML、绘制普通结构 | Windows、Codex、Python 环境、`cdxml-toolkit`、MCP SDK |
+| 解析名称、读取或生成 CDXML、绘制普通结构 | Windows、macOS 或 Linux，Codex、Python 环境、`cdxml-toolkit-community`、MCP SDK |
 | 使用 ChemDraw 原生渲染、CDX 转换、结构清理 | 上述组件，加 Windows 桌面版 ChemDraw、有效许可证和 COM 注册 |
 | 比较分子、调用 ChemScript SDK | 上述组件，加 ChemScript DLL；某些旧版本还需要独立的 32 位辅助 Python |
 | 在 DOCX 或 PPTX 中插入可编辑 ChemDraw 对象 | 上述组件，加对应的 Word 或 PowerPoint 桌面应用 |
 | 在本机识别化学结构图片 | 上述组件，加 DECIMER 模型权重；需要更多内存、磁盘和首次下载时间 |
 | 让另一台电脑调用这台 ChemDraw 工作站 | 服务器端完成上述安装，再配置带令牌的 Streamable HTTP 和加密网络 |
 
-只使用普通 CDXML 工具时，可以暂时不安装 ChemDraw、Office、ChemScript 辅助环境或 DECIMER 模型；运行前提检查时加入 `-SkipChemDraw`。需要原生渲染、CDX、ChemScript 或可编辑 Office 对象时，再安装对应桌面软件。
+只使用普通 CDXML 工具时，可以暂时不安装 ChemDraw、Office、ChemScript 辅助环境或 DECIMER 模型；运行前提检查时使用 `-Capabilities core`。需要原生渲染、CDX、ChemScript 或可编辑 Office 对象时，再安装对应桌面软件并选择相应能力。
 
 ## 安装前提
 
 ### 电脑和系统
 
-- 64 位 Windows 10 或 Windows 11。ChemDraw COM 自动化不能在 macOS、Linux 或 WSL 中直接运行；这些系统可以作为远程客户端。
+- 可移植 CDXML 和 RDKit 功能支持 Windows、macOS 与 Linux。ChemDraw COM 自动化不能在 macOS、Linux 或 WSL 中直接运行；原生功能需要 64 位 Windows 10 或 Windows 11。
 - 建议至少 8 GB 内存和 10 GB 可用磁盘。使用本地 DECIMER 时，建议 16 GB 内存并预留更多空间。
 - 首次安装需要联网下载项目、Python 包和可选模型。学校或单位网络如使用代理，应按本单位要求配置 Conda、pip 和 Git。
 - 使用 ChemDraw 原生功能时必须持有合法许可证。项目不会安装、激活或修改 ChemDraw 许可证。
@@ -88,7 +88,7 @@ Codex 桌面版可以作为操作界面，但自动配置 MCP 时仍需让 `code
 ### Python 版本与位数
 
 - 主 MCP 环境使用 64 位 Python 3.10 至 3.13，推荐 Python 3.12。
-- 测试组合为 `cdxml-toolkit==0.5.17` 与 `mcp==2.0.0`。现有 MCP SDK 1.x 环境仍兼容，但新安装建议使用测试组合。
+- 测试运行时为 `cdxml-toolkit-community==0.7.0a1`，支持 MCP SDK 1.x 和 2.x。
 - 不要把这些包安装到 Conda 的 `base` 环境。独立的 `cdxml` 环境更容易诊断和重新安装。
 - 某些旧版 ChemScript DLL 只有 32 位。此时保留 64 位 `cdxml` 主环境，并让 `cdxml-doctor` 创建独立辅助环境。不要把主环境改成 32 位。
 
@@ -97,7 +97,7 @@ Codex 桌面版可以作为操作界面，但自动配置 MCP 时仍需让 `code
 - Word 或 PowerPoint 桌面应用：仅在处理可编辑 Office 对象时需要。网页版 Office 不提供本地 COM 自动化。
 - ChemScript：分子比较、名称双向转换和完整 SDK 调用需要。检查脚本会确认 DLL 是否存在，连接测试在后续步骤执行。
 - DECIMER 模型：本地图片识别需要。仓库和普通 pip 安装不含模型权重。
-- Java/OPSIN：名称解析的备用方案。`cdxml-toolkit` 可以按其自身诊断说明配置。
+- Java/OPSIN：名称解析的备用方案。`cdxml-toolkit-community` 可以按其诊断说明配置。
 - Tailscale、WireGuard 或 HTTPS 反向代理：跨电脑访问时建议使用，单机 stdio 模式无需网络端口。
 
 ## 从零开始安装
@@ -113,7 +113,7 @@ Codex 桌面版可以作为操作界面，但自动配置 MCP 时仍需让 `code
 3. 新建一个空白文档，绘制任意简单结构并保存。
 4. 关闭 ChemDraw，再继续后续步骤。
 
-已经激活并能正常保存文件的 ChemDraw 无需再次激活。安装检查只读取程序和 COM 注册信息，不会修改许可证。仅使用普通 CDXML 工具时可以跳过本步骤，并在第 6 步使用 `-SkipChemDraw`。
+已经激活并能正常保存文件的 ChemDraw 无需再次激活。安装检查只读取程序和 COM 注册信息，不会修改许可证。仅使用普通 CDXML 工具时可以跳过本步骤，并在第 6 步使用 `-Capabilities core`。
 
 ### 2. 安装并登录 Codex
 
@@ -173,14 +173,14 @@ Get-ChildItem .\skill\chemdraw\SKILL.md
 conda create -n cdxml python=3.12 pip -y
 conda activate cdxml
 python -m pip install --upgrade pip
-python -m pip install "mcp==2.0.0" "cdxml-toolkit==0.5.17"
+python -m pip install "cdxml-toolkit-community[windows,office,chemscript] @ git+https://github.com/ZiChenWang114514/cdxml-toolkit-community.git@v0.7.0a1"
 python -m pip check
 python -c "import cdxml_toolkit, mcp, rdkit, win32com.client; print('Python runtime OK')"
 $python = (python -c "import sys; print(sys.executable)").Trim()
 $python
 ```
 
-最后一行应显示 `cdxml` 环境中的 `python.exe` 路径。安装过程会下载 RDKit、pywin32、Office 文件处理、PDF、图像和机器学习相关依赖，耗时和占用空间会明显高于普通 Python 包，请等待命令完成。这里的 Office 文件处理库不会安装 Microsoft Word 或 PowerPoint；可编辑对象功能仍需单独安装桌面版 Office。
+最后一行应显示 `cdxml` 环境中的 `python.exe` 路径。上面的 Windows 安装包含 RDKit、pywin32、Office 文件处理和 ChemScript 运行依赖。DECIMER、分析、图像和 HTTP 功能使用项目 README 中列出的对应附加依赖。Python 库不会安装 Microsoft Word 或 PowerPoint；可编辑对象功能仍需单独安装桌面版 Office。
 
 `$python` 只在当前 PowerShell 窗口中有效。重新打开终端后，可以重新运行：
 
@@ -194,17 +194,17 @@ $python = (conda run -n cdxml python -c "import sys; print(sys.executable)" | Se
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
-& .\scripts\check_prerequisites.ps1 -Python $python
+& .\scripts\check_prerequisites.ps1 -Python $python -Capabilities core,native,chemscript,office
 ```
 
 仅使用普通 CDXML 工具、没有安装 ChemDraw 时运行：
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
-& .\scripts\check_prerequisites.ps1 -Python $python -SkipChemDraw
+& .\scripts\check_prerequisites.ps1 -Python $python -Capabilities core
 ```
 
-默认检查会把 ChemDraw、.NET Framework 和 COM 注册视为原生功能要求；`-SkipChemDraw` 只跳过这些项目，不会跳过 Python、Codex、MCP 或包依赖检查。
+`-Capabilities` 控制本次检查要求的功能。默认值为 `core`；选择 `native`、`chemscript` 或 `office` 时，检查器才会要求 Windows 和相应桌面组件。
 
 检查结果含义：
 
@@ -216,10 +216,10 @@ Set-ExecutionPolicy -Scope Process Bypass
 检查器不会启动 ChemDraw，不会读取任何分子或实验文件，也不会修改系统配置。需要把结果发给维护者时，可以生成 JSON：
 
 ```powershell
-& .\scripts\check_prerequisites.ps1 -Python $python -Json
+& .\scripts\check_prerequisites.ps1 -Python $python -Capabilities core,native,chemscript,office -Json
 ```
 
-CDXML-only 环境生成 JSON 时同样加入 `-SkipChemDraw`。
+仅使用可移植功能的环境生成 JSON 时使用 `-Capabilities core`。
 
 ### 7. 配置 ChemScript（需要分子比较或 SDK 时）
 
@@ -261,10 +261,10 @@ cdxml-doctor --no-tests
 
 ```powershell
 codex mcp get cdxml-toolkit --json
-& "$HOME\.codex\skills\chemdraw\scripts\check_prerequisites.ps1" -Python $python
+& "$HOME\.codex\skills\chemdraw\scripts\check_prerequisites.ps1" -Python $python -Capabilities core,native,chemscript,office
 ```
 
-CDXML-only 环境在已安装目录的检查命令末尾同样加入 `-SkipChemDraw`。`codex mcp get` 与前提检查适合作为第一次使用前的基础验证。
+仅使用可移植功能的环境在已安装目录中使用 `-Capabilities core`。`codex mcp get` 与前提检查适合作为第一次使用前的基础验证。
 
 健康检查会编译 Python 模块、运行完整测试并比较自动生成的参考文件，主要用于维护和深入诊断，可能持续数分钟。根据已安装的软件选择一种方式：
 
@@ -295,12 +295,11 @@ CDXML-only 环境在已安装目录的检查命令末尾同样加入 `-SkipChemD
 请使用 ChemDraw Skill 解析 aspirin，将可编辑 CDXML 和 ChemDraw 原生 PNG 保存到我的 Documents 目录，并报告绝对路径和化学验证结果。
 ```
 
-Codex 应调用 `cdxml-toolkit` 工具，返回存在且非空的 CDXML 和 PNG，并报告结构身份、化学保持状态、绝对路径和警告。首次科学使用前仍需在 ChemDraw 中打开结果，并与可信结构来源核验。
+Codex 应调用 `cdxml-toolkit-community` 运行时提供的工具，返回存在且非空的 CDXML 和 PNG，并报告结构身份、化学保持状态、绝对路径和警告。首次科学使用前仍需在 ChemDraw 中打开结果，并与可信结构来源核验。
 
 ## 验证范围与科学使用
 
-- 当前 GitHub Actions 在 Windows、Python 3.12、`mcp==2.0.0` 和 `cdxml-toolkit==0.5.17` 上验证便携代码、MCP、安装器和测试。Python 3.10 至 3.13 受支持，但当前托管 CI 只运行 3.12。
-- MCP Python SDK 1.x 保留兼容路径，当前 CI 不执行这组组合。新环境应优先使用 `mcp==2.0.0`。
+- 当前 GitHub Actions 在 Windows 和 Linux、Python 3.12、MCP 1.28.1 与 2.0.0，以及 `cdxml-toolkit-community==0.7.0a1` 上验证可移植代码、MCP、安装器和测试。Python 3.10 至 3.13 受支持。
 - 托管 CI 无法安装有许可证的 ChemDraw、ChemScript、Word 或 PowerPoint。原生渲染、SDK 和可编辑 Office 对象必须在本机 Windows 环境中验证。
 - 结构任务会检查来源身份、MCS 结构差异、立体化学、同位素、电荷、楔形键和原生渲染兼容性。渲染成功只表示文件可被 ChemDraw 处理，科研结论仍由使用者确认。
 - 常规修改工具默认创建新文件并拒绝意外替换。ChemScript SDK 只有在显式允许文件访问和替换时才可覆盖已有文件。
@@ -347,7 +346,7 @@ stdio 是单机默认配置，不监听网络端口。需要让另一台电脑�
 Set-Location "$HOME\Documents\codex-chemdraw-skill"
 git pull --ff-only
 $python = (conda run -n cdxml python -c "import sys; print(sys.executable)" | Select-Object -Last 1).Trim()
-& .\scripts\check_prerequisites.ps1 -Python $python
+& .\scripts\check_prerequisites.ps1 -Python $python -Capabilities core,native,chemscript,office
 & .\scripts\install.ps1 -Python $python -Apply -ConfigureMcp
 ```
 
@@ -360,9 +359,9 @@ $python = (conda run -n cdxml python -c "import sys; print(sys.executable)" | Se
 - [项目指南](guide.md)：安装诊断、运行时发现、架构、Streamable HTTP、开发验证和第三方软件说明。
 - [工作流目录](../skill/chemdraw/references/workflow-router.md)：绘制、比较、反应式、识图、Office、实验记录和诊断步骤。
 - [MCP 工具真实签名](../skill/chemdraw/references/mcp-signatures.md)：当前可调用工具的精确参数与返回值。
-- [`cdxml-toolkit` 公开接口审计清单](../skill/chemdraw/references/toolkit-public-inventory.md)：按领域拆分的 449 个公开符号索引。
+- [`cdxml-toolkit-community` 公开接口审计清单](../skill/chemdraw/references/toolkit-public-inventory.md)：按领域拆分的 584 个公开符号索引。
 - [贡献说明](../.github/contributing.md)与[安全策略](../.github/SECURITY.md)：开发流程、私下报告方式和受支持版本。
 
 远程识图默认拒绝上传，必须由调用者明确确认。所有生成或识别出的化学结构在科研使用前都应与原始资料核验。
 
-项目自有代码和文档采用 [MIT License](../LICENSE)；ChemDraw、Microsoft Office、Codex、`cdxml-toolkit`、MCP Python SDK、RDKit、DECIMER 及其依赖分别遵循各自授权条款。
+项目自有代码和文档采用 [MIT License](../LICENSE)；ChemDraw、Microsoft Office、Codex、`cdxml-toolkit-community`、MCP Python SDK、RDKit、DECIMER 及其依赖分别遵循各自授权条款。

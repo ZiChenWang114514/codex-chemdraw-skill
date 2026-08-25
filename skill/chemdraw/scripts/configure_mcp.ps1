@@ -26,6 +26,9 @@ function Get-Sha256Hex {
 }
 
 function Get-DiscoveryBootstrap {
+    if ($Python -and (Test-Path -LiteralPath $Python -PathType Leaf)) {
+        return [pscustomobject]@{ Command = $Python; Arguments = @() }
+    }
     $launcher = Get-Command py.exe -ErrorAction SilentlyContinue
     if ($launcher) {
         return [pscustomobject]@{ Command = $launcher.Source; Arguments = @('-3') }
@@ -33,9 +36,6 @@ function Get-DiscoveryBootstrap {
     $interpreter = Get-Command python.exe -ErrorAction SilentlyContinue
     if ($interpreter) {
         return [pscustomobject]@{ Command = $interpreter.Source; Arguments = @() }
-    }
-    if ($Python -and (Test-Path -LiteralPath $Python -PathType Leaf)) {
-        return [pscustomobject]@{ Command = $Python; Arguments = @() }
     }
     throw 'A bootstrap Python is required to run runtime_discovery.py.'
 }
@@ -102,8 +102,7 @@ function Test-SamePath {
 function Test-CorrectRegistration {
     param(
         [object]$Registration,
-        [string]$PythonPath,
-        [string]$ServerPath
+        [string]$PythonPath
     )
 
     if (-not $Registration -or -not $Registration.transport) { return $false }
@@ -114,13 +113,12 @@ function Test-CorrectRegistration {
     if ($transport.type -ne 'stdio') { return $false }
     if (-not (Test-SamePath $transport.command $PythonPath)) { return $false }
     $registeredArguments = @($transport.args)
-    if ($registeredArguments.Count -notin @(1, 2)) { return $false }
-    if (-not (Test-SamePath $registeredArguments[0] $ServerPath)) { return $false }
-    if (
-        $registeredArguments.Count -eq 2 -and
-        $registeredArguments[1] -ne '--no-preload-decimer'
-    ) {
-        return $false
+    $expectedArguments = @('-m', 'cdxml_toolkit.mcp_runtime', '--profile', 'codex')
+    if ($registeredArguments.Count -ne $expectedArguments.Count) { return $false }
+    for ($index = 0; $index -lt $expectedArguments.Count; $index++) {
+        if ([string]$registeredArguments[$index] -ne $expectedArguments[$index]) {
+            return $false
+        }
     }
 
     $requiredEnvironment = [ordered]@{
@@ -135,59 +133,6 @@ function Test-CorrectRegistration {
         }
     }
     return $true
-}
-
-function Get-ReplacementEnvironment {
-    param([object]$Registration)
-
-    $environment = @{}
-    if ($Registration -and $Registration.transport -and $Registration.transport.env) {
-        foreach ($property in $Registration.transport.env.PSObject.Properties) {
-            $environment[$property.Name] = [string]$property.Value
-        }
-    }
-    $environment['TF_CPP_MIN_LOG_LEVEL'] = '3'
-    $environment['TF_ENABLE_ONEDNN_OPTS'] = '0'
-    return $environment
-}
-
-function Assert-ConfigBlockCanRoundTrip {
-    param(
-        [string]$PythonPath,
-        [string]$ResolvedConfigPath
-    )
-
-    if (-not (Test-Path -LiteralPath $ResolvedConfigPath -PathType Leaf)) {
-        return
-    }
-    $auditCode = '"CHEMDRAW_MCP_CONFIG_AUDIT"; import json, sys, tomllib; from pathlib import Path; config_path = Path(sys.argv[1]); data = tomllib.loads(config_path.read_text(encoding="utf-8")); block = data.get("mcp_servers", {}).get("cdxml-toolkit", {}); print(json.dumps(block))'
-    try {
-        $auditOutput = & $PythonPath -c $auditCode $ResolvedConfigPath 2>&1
-    } catch {
-        throw "Cannot safely inspect the current MCP block for round-trip settings: $($_.Exception.Message)"
-    }
-    $auditExitCode = $LASTEXITCODE
-    $auditText = ($auditOutput | Out-String).Trim()
-    if ($auditExitCode -ne 0) {
-        throw "Cannot safely inspect the current MCP block for round-trip settings (audit exit code $auditExitCode)."
-    }
-    try {
-        $block = $auditText | ConvertFrom-Json
-    } catch {
-        throw 'Cannot safely inspect the current MCP block because the audit returned invalid JSON.'
-    }
-    $allowedKeys = @('args', 'command', 'env')
-    $unsupportedKeys = @(
-        $block.PSObject.Properties.Name |
-            Where-Object { $_ -notin $allowedKeys } |
-            Sort-Object
-    )
-    if ($unsupportedKeys.Count -gt 0) {
-        throw (
-            'Refusing to replace cdxml-toolkit because codex mcp add cannot ' +
-            'round-trip these settings: ' + ($unsupportedKeys -join ', ')
-        )
-    }
 }
 
 function Get-CurrentRegistration {
@@ -212,20 +157,7 @@ function Invoke-Configuration {
     $discovery = Invoke-RuntimeDiscovery
     $pythonPath = [IO.Path]::GetFullPath([string]$discovery.python.path)
     $skillPath = [IO.Path]::GetFullPath([string]$discovery.skill_root.path)
-    $serverPath = [IO.Path]::GetFullPath((Join-Path $skillPath 'scripts\mcp_server.py'))
-
-    if (-not (Test-Path -LiteralPath $serverPath -PathType Leaf)) {
-        throw "MCP server script not found: $serverPath"
-    }
-
-    $serverDirectory = Split-Path -Parent $serverPath
-    $validationCode = @'
-import sys
-sys.path.insert(0, sys.argv[1])
-import mcp_server
-mcp_server.build_server()
-'@
-    $validationOutput = & $pythonPath -c $validationCode $serverDirectory 2>&1
+    $validationOutput = & $pythonPath -m cdxml_toolkit.mcp_runtime --help 2>&1
     $validationExitCode = $LASTEXITCODE
     if ($validationExitCode -ne 0) {
         $detail = ($validationOutput | Out-String).Trim()
@@ -249,31 +181,15 @@ mcp_server.build_server()
         }
 
         $current = Get-CurrentRegistration
-        $isCorrect = Test-CorrectRegistration $current $pythonPath $serverPath
-        $replacementEnvironment = Get-ReplacementEnvironment $current
-        $visibleEnvironmentKeys = @(
-            'TF_CPP_MIN_LOG_LEVEL',
-            'TF_ENABLE_ONEDNN_OPTS'
-        )
-        $environmentPreview = @(
-            $replacementEnvironment.Keys |
-                Sort-Object |
-                ForEach-Object {
-                    $displayValue = if ($_ -in $visibleEnvironmentKeys) {
-                        $replacementEnvironment[$_]
-                    } else {
-                        '<preserved>'
-                    }
-                    "--env $_=$displayValue"
-                }
-        ) -join ' '
+        $isCorrect = Test-CorrectRegistration $current $pythonPath
         $proposal = [ordered]@{
             apply = [bool]$Apply
             python = $pythonPath
             skill_root = $skillPath
-            server = $serverPath
+            server_module = 'cdxml_toolkit.mcp_runtime'
+            profile = 'codex'
             config = $resolvedConfigPath
-            command = "codex mcp add cdxml-toolkit $environmentPreview -- `"$pythonPath`" `"$serverPath`""
+            command = "`"$pythonPath`" -m cdxml_toolkit.mcp_runtime.codex_config --config `"$resolvedConfigPath`" --python `"$pythonPath`""
             status = if ($isCorrect) { 'unchanged' } else { 'proposal' }
         }
 
@@ -291,8 +207,6 @@ mcp_server.build_server()
             return
         }
 
-        Assert-ConfigBlockCanRoundTrip $pythonPath $resolvedConfigPath
-
         $hadConfig = Test-Path -LiteralPath $resolvedConfigPath -PathType Leaf
         $baselineFingerprint = Get-ConfigFingerprint $resolvedConfigPath
         $backup = $null
@@ -307,33 +221,27 @@ mcp_server.build_server()
 
         $lastKnownFingerprint = $baselineFingerprint
         try {
-            if ($current) {
-                if ((Get-ConfigFingerprint $resolvedConfigPath) -ne $lastKnownFingerprint) {
-                    throw 'config.toml changed before MCP removal; no mutation was attempted.'
-                }
-                $remove = Invoke-CodexCommand @('mcp', 'remove', 'cdxml-toolkit')
-                if ($remove.ExitCode -ne 0) {
-                    throw "codex mcp remove failed with exit code $($remove.ExitCode)."
-                }
-                $lastKnownFingerprint = Get-ConfigFingerprint $resolvedConfigPath
-            }
-
             if ((Get-ConfigFingerprint $resolvedConfigPath) -ne $lastKnownFingerprint) {
-                throw 'config.toml changed before MCP registration; the add operation was not started.'
+                throw 'config.toml changed before MCP registration; no mutation was attempted.'
             }
-            $addArguments = @('mcp', 'add', 'cdxml-toolkit')
-            foreach ($key in @($replacementEnvironment.Keys | Sort-Object)) {
-                $addArguments += @('--env', "$key=$($replacementEnvironment[$key])")
+            $updateArguments = @(
+                '-m', 'cdxml_toolkit.mcp_runtime.codex_config',
+                '--config', $resolvedConfigPath,
+                '--python', $pythonPath
+            )
+            if ($hadConfig) {
+                $updateArguments += @('--expected-sha256', $baselineFingerprint)
             }
-            $addArguments += @('--', $pythonPath, $serverPath)
-            $add = Invoke-CodexCommand $addArguments
-            if ($add.ExitCode -ne 0) {
-                throw "codex mcp add failed with exit code $($add.ExitCode)."
+            $updateOutput = & $pythonPath @updateArguments 2>&1
+            $updateExitCode = $LASTEXITCODE
+            if ($updateExitCode -ne 0) {
+                $detail = ($updateOutput | Out-String).Trim()
+                throw "MCP config update failed with exit code $updateExitCode`: $detail"
             }
             $lastKnownFingerprint = Get-ConfigFingerprint $resolvedConfigPath
 
             $verified = Get-CurrentRegistration
-            if (-not (Test-CorrectRegistration $verified $pythonPath $serverPath)) {
+            if (-not (Test-CorrectRegistration $verified $pythonPath)) {
                 throw 'The written MCP registration did not match the requested command.'
             }
 

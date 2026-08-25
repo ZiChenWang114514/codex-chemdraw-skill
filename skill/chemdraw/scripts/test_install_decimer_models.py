@@ -8,9 +8,7 @@ import unittest
 from unittest import mock
 import zipfile
 
-import install_decimer_models
-
-
+from cdxml_toolkit.mcp_runtime import install_decimer_models
 def model_fixture(payload: bytes) -> dict[str, str]:
     return {
         "key": "standard",

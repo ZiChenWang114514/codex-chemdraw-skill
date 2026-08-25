@@ -7,7 +7,7 @@ import unittest
 from unittest import mock
 
 try:
-    import process_control
+    from cdxml_toolkit.mcp_runtime import process_control
 except ImportError:
     process_control = None
 
@@ -142,6 +142,51 @@ class AutomationProcessCleanupTests(unittest.TestCase):
             process_control.subprocess, "run", return_value=completed
         ), mock.patch.object(
             process_control, "pid_is_running", return_value=False
+        ):
+            snapshot = process_control.snapshot_automation_processes()
+
+        self.assertEqual(snapshot, {})
+
+    def test_snapshot_queries_only_supported_automation_processes(self):
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="[]",
+            stderr="",
+        )
+        with mock.patch.object(
+            process_control, "_system_executable", return_value=Path("powershell.exe")
+        ), mock.patch.object(
+            process_control.subprocess, "run", return_value=completed
+        ) as run:
+            process_control.snapshot_automation_processes()
+
+        command = run.call_args.args[0][-1]
+        self.assertIn("-Filter", command)
+        self.assertIn("Name='ChemDraw.exe'", command)
+        self.assertNotIn("Where-Object", command)
+
+    def test_snapshot_ignores_terminated_records_even_if_pid_probe_is_inconclusive(self):
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "pid": 606,
+                    "parent_pid": 1,
+                    "name": "ChemDraw.exe",
+                    "thread_count": 0,
+                    "virtual_size": 0,
+                }
+            ),
+            stderr="",
+        )
+        with mock.patch.object(
+            process_control, "_system_executable", return_value=Path("powershell.exe")
+        ), mock.patch.object(
+            process_control.subprocess, "run", return_value=completed
+        ), mock.patch.object(
+            process_control, "pid_is_running", return_value=True
         ):
             snapshot = process_control.snapshot_automation_processes()
 

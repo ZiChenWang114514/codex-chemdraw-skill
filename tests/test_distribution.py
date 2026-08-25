@@ -128,8 +128,9 @@ class DistributionTests(unittest.TestCase):
         )
         self.assertIn("full-portable-tests:", workflow)
         self.assertIn('python-version: "3.12"', workflow)
-        self.assertIn('cdxml-toolkit==0.5.17', workflow)
-        self.assertIn('mcp==2.0.0', workflow)
+        self.assertIn('cdxml-toolkit-community.git@v0.7.0a1', workflow)
+        self.assertIn('mcp-version: ["1.28.1", "2.0.0"]', workflow)
+        self.assertIn('os: [windows-latest, ubuntu-latest]', workflow)
         self.assertIn('unittest discover -s skill/chemdraw/scripts', workflow)
         self.assertIn('check_prerequisites.ps1', workflow)
 

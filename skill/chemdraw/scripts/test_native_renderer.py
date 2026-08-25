@@ -7,9 +7,7 @@ from unittest import mock
 
 from PIL import Image
 
-import native_renderer
-
-
+from cdxml_toolkit.mcp_runtime import native_renderer
 class _Preferences:
     TransparentPNGs = True
     PNGResolution = 72
@@ -77,7 +75,7 @@ class NativeRendererTests(unittest.TestCase):
         application = _Application(document)
 
         with mock.patch(
-            "native_renderer._acquire_application",
+            "cdxml_toolkit.mcp_runtime.native_renderer._acquire_application",
             return_value=(application, True),
         ):
             result = native_renderer.render_cdxml(self.source, output, timeout_seconds=2)
@@ -91,7 +89,7 @@ class NativeRendererTests(unittest.TestCase):
         output = self.root / "output.png"
         error = _ComError(-2147221230, "Class is not licensed for use")
 
-        with mock.patch("native_renderer._acquire_application", side_effect=error):
+        with mock.patch("cdxml_toolkit.mcp_runtime.native_renderer._acquire_application", side_effect=error):
             with self.assertRaises(native_renderer.NativeRenderError) as raised:
                 native_renderer.render_cdxml(self.source, output, timeout_seconds=1)
 
@@ -118,7 +116,7 @@ class NativeRendererTests(unittest.TestCase):
         application = _Application(_Document(invalid=True))
 
         with mock.patch(
-            "native_renderer._acquire_application",
+            "cdxml_toolkit.mcp_runtime.native_renderer._acquire_application",
             return_value=(application, True),
         ):
             with self.assertRaises(native_renderer.NativeRenderError) as raised:
@@ -133,7 +131,7 @@ class NativeRendererTests(unittest.TestCase):
         application.Visible = True
 
         with mock.patch(
-            "native_renderer._acquire_application",
+            "cdxml_toolkit.mcp_runtime.native_renderer._acquire_application",
             return_value=(application, False),
         ):
             native_renderer.render_cdxml(self.source, output, timeout_seconds=2)
@@ -150,7 +148,7 @@ class NativeRendererTests(unittest.TestCase):
         application = _Application(document)
 
         with mock.patch(
-            "native_renderer._acquire_application",
+            "cdxml_toolkit.mcp_runtime.native_renderer._acquire_application",
             return_value=(application, True),
         ) as acquire:
             with native_renderer.NativeRenderSession(timeout_seconds=2) as session:

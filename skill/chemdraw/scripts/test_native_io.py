@@ -8,7 +8,7 @@ import unittest
 from unittest import mock
 
 try:
-    import native_io
+    from cdxml_toolkit.mcp_runtime import native_io
 except ImportError:
     native_io = None
 
@@ -247,8 +247,7 @@ class NativeIOBridgeTests(unittest.TestCase):
 class NativeIOIntegrationTests(unittest.TestCase):
     def test_parse_reaction_explicit_cdx_restores_original_path_in_json(self):
         import json
-        import official_overrides
-
+        from cdxml_toolkit.mcp_runtime import official_overrides
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             source = root / "中文" / "结构.cdx"
@@ -275,8 +274,7 @@ class NativeIOIntegrationTests(unittest.TestCase):
 
     def test_parse_reaction_directory_stages_discovered_cdx_under_ascii_path(self):
         import json
-        import official_overrides
-
+        from cdxml_toolkit.mcp_runtime import official_overrides
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             input_dir = root / "中文实验"
@@ -311,8 +309,7 @@ class NativeIOIntegrationTests(unittest.TestCase):
 
     def test_office_preview_renderer_receives_only_ascii_paths(self):
         from PIL import Image
-        import office_objects
-
+        from cdxml_toolkit.mcp_runtime import office_objects
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             source = root / "中文" / "结构.cdxml"
@@ -329,7 +326,7 @@ class NativeIOIntegrationTests(unittest.TestCase):
             with mock.patch("pythoncom.CoInitialize"), mock.patch(
                 "pythoncom.CoUninitialize"
             ), mock.patch(
-                "office_objects.native_renderer.render_cdxml",
+                "cdxml_toolkit.mcp_runtime.office_objects.native_renderer.render_cdxml",
                 side_effect=lambda source, destination, *, dpi: render(
                     source, destination, png_dpi=dpi
                 ),
@@ -340,8 +337,7 @@ class NativeIOIntegrationTests(unittest.TestCase):
 
     def test_official_render_override_bridges_unicode_source_and_destination(self):
         from PIL import Image
-        import official_overrides
-
+        from cdxml_toolkit.mcp_runtime import official_overrides
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             source = root / "中文输入" / "结构.cdxml"
@@ -357,7 +353,7 @@ class NativeIOIntegrationTests(unittest.TestCase):
                 return {"ok": True, "output": str(output_path)}
 
             with mock.patch(
-                "official_overrides.native_renderer.render_cdxml",
+                "cdxml_toolkit.mcp_runtime.official_overrides.native_renderer.render_cdxml",
                 side_effect=lambda source, destination, *, dpi: (
                     render(source, output_path=destination), str(destination)
                 )[1],

@@ -10,7 +10,7 @@ This is the single detailed guide for installing, understanding, testing, and op
 
 | Feature | Additional requirement |
 | --- | --- |
-| CDXML parsing, name resolution, and ordinary drawing | Codex, Python runtime, `cdxml-toolkit`, and MCP SDK |
+| CDXML parsing, name resolution, and ordinary drawing | Codex, Python runtime, `cdxml-toolkit-community`, and MCP SDK |
 | Native PNG rendering, CDX conversion, and ChemDraw cleanup | Licensed Windows desktop ChemDraw with working COM registration |
 | Molecule comparison and full ChemScript SDK access | Managed and native ChemScript DLLs; older 32-bit releases may need a separate helper Python |
 | Editable ChemDraw objects in DOCX or PPTX | The corresponding Microsoft Word or PowerPoint desktop application |
@@ -21,16 +21,16 @@ Office, DECIMER, and the ChemScript helper environment are optional until a work
 
 ### Host prerequisites
 
-- 64-bit Windows 10 or Windows 11. macOS, Linux, and WSL can act as remote clients but cannot host ChemDraw COM automation.
-- Windows PowerShell 5.1 or PowerShell 7.
+- Portable CDXML and RDKit workflows run on Windows, macOS, and Linux. Native ChemDraw COM, ChemScript, and editable Office objects require a 64-bit Windows 10 or Windows 11 host.
+- Windows PowerShell 5.1 or PowerShell 7 is required for the supplied installer and checker. Portable package commands can run in the platform's usual shell.
 - A working `codex` command and a completed Codex sign-in. Follow the [official Codex CLI guide](https://developers.openai.com/codex/cli).
-- A licensed Windows desktop ChemDraw installation. Browser-only ChemDraw does not expose COM or ChemScript. ChemDraw 22.0 is tested; review the [current Revvity system requirements](https://support.revvitysignals.com/hc/en-us/articles/43424307511572-ChemDraw-What-are-the-System-requirements-for-ChemDraw-ChemOffice) for the installed release.
+- A licensed Windows desktop ChemDraw installation is needed only for native features. Browser-only ChemDraw does not expose COM or ChemScript. ChemDraw 22.0 is tested; review the [current Revvity system requirements](https://support.revvitysignals.com/hc/en-us/articles/43424307511572-ChemDraw-What-are-the-System-requirements-for-ChemDraw-ChemOffice) for the installed release.
 - A 64-bit Python 3.10-3.13 runtime. Python 3.12 is tested and a dedicated Conda environment is recommended.
-- [Git for Windows](https://git-scm.com/install/windows), or a GitHub ZIP download if Git is unavailable.
+- [Git](https://git-scm.com/downloads), or a GitHub ZIP download if Git is unavailable.
 - At least 10 GiB free disk space and 8 GiB RAM are practical minimums for the complete Python environment. Local DECIMER use benefits from 16 GiB RAM and additional free space.
 - Initial network access for the repository and Python dependencies. Local DECIMER adds a separate model download.
 
-The tested package pair is `cdxml-toolkit==0.5.17` and `mcp==2.0.0`. MCP SDK 1.x remains supported. Keep the main MCP environment 64-bit. When an older ChemScript DLL is 32-bit, configure a separate helper environment instead of changing the main runtime.
+The tested runtime is `cdxml-toolkit-community==0.7.0a1` with MCP SDK 1.x or 2.x. Keep the main MCP environment 64-bit. When an older ChemScript DLL is 32-bit, configure a separate helper environment instead of changing the main runtime.
 
 ### First-Time Windows Setup
 
@@ -52,7 +52,7 @@ Set-Location .\codex-chemdraw-skill
 conda create -n cdxml python=3.12 pip -y
 conda activate cdxml
 python -m pip install --upgrade pip
-python -m pip install "mcp==2.0.0" "cdxml-toolkit==0.5.17"
+python -m pip install "cdxml-toolkit-community[windows,office,chemscript] @ git+https://github.com/ZiChenWang114514/cdxml-toolkit-community.git@v0.7.0a1"
 python -m pip check
 python -c "import cdxml_toolkit, mcp, rdkit, win32com.client; print('Python runtime OK')"
 $python = (python -c "import sys; print(sys.executable)").Trim()
@@ -64,10 +64,10 @@ Run the read-only prerequisite report before installation:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
-& .\scripts\check_prerequisites.ps1 -Python $python
+& .\scripts\check_prerequisites.ps1 -Python $python -Capabilities core,native,chemscript,office
 ```
 
-`PASS` satisfies a check, `WARN` identifies an optional or manual item, `FAIL` requires attention, and `SKIP` means that no conclusion was obtained. The checker does not launch ChemDraw, inspect molecule files, or change system configuration. Add `-Json` for a machine-readable report. Use `-SkipPythonPackages` only for an early host check before package installation.
+`PASS` satisfies a check, `WARN` identifies an optional or manual item, `FAIL` requires attention, and `SKIP` means that no conclusion was obtained. The checker does not launch ChemDraw, inspect molecule files, or change system configuration. Add `-Json` for a machine-readable report. Use `-Capabilities core` for a portable-only installation and `-SkipPythonPackages` only for an early host check before package installation.
 
 If molecule comparison or ChemScript SDK tools are required, configure and ping the bridge:
 
@@ -91,7 +91,7 @@ Restart Codex and verify registration:
 
 ```powershell
 codex mcp get cdxml-toolkit --json
-& "$HOME\.codex\skills\chemdraw\scripts\check_prerequisites.ps1" -Python $python
+& "$HOME\.codex\skills\chemdraw\scripts\check_prerequisites.ps1" -Python $python -Capabilities core,native,chemscript,office
 ```
 
 Choose the health check that matches the installed applications:
@@ -113,7 +113,7 @@ Close manually opened ChemDraw and Office applications before native probes. A s
 
 - `git`, `conda`, or `codex` is not recognized: reopen PowerShell after installation and confirm the correct user account. Use Anaconda PowerShell Prompt for Conda.
 - `No usable Python runtime found`: recompute `$python` from the `cdxml` environment and pass that exact path with `-Python`.
-- Package import or `pip check` fails: create a fresh `cdxml` environment and install the pinned package pair there; avoid sharing the environment with unrelated projects.
+- Package import or `pip check` fails: create a fresh `cdxml` environment and install the tested community release there; avoid sharing the environment with unrelated projects.
 - `ChemDraw.Application` is absent: verify that Windows desktop ChemDraw is installed, open it once, and repair the installation if COM registration remains missing.
 - ChemDraw is activated but a license probe fails: open and save a test document manually, close ChemDraw, and run the selected native check again. Do not change a working license as a diagnostic shortcut.
 - ChemScript files exist but `ping` fails: rerun `configure`, inspect DLL bitness, and use a separate helper Python for a 32-bit release.
@@ -160,7 +160,7 @@ Molecule comparison resolves both inputs through the installed `ChemScriptBridge
 
 The ChemScript SDK adapter reflects the installed managed assembly at runtime. It catalogs every SDK-declared public type and member, then reports both catalog coverage and execution-path coverage. A declarative program can construct objects, call static or instance methods, read or write members, index and enumerate collections, and dispose objects. File access, replacement of existing files, and SWIG pointer/handle interoperability each require an explicit option. This gives every public member a discoverable record while keeping native interop isolated from the MCP process.
 
-The tested server runtime uses MCP Python SDK 2.0.0. An internal compatibility module maps the high-level SDK rename for `cdxml-toolkit==0.5.17`; MCP SDK 1.x remains supported for existing installations.
+The tested server runtime supports MCP Python SDK 1.x and 2.x. Compatibility handling lives in `cdxml-toolkit-community==0.7.0a1`, and CI exercises both supported SDK generations.
 
 Generated signatures and inventory files must be regenerated from source. Do not manually duplicate those signatures in narrative documentation.
 
@@ -219,7 +219,7 @@ GitHub Actions runs the portable checks. Machine-specific native checks remain l
 The repository's own code and documentation use the MIT License. It does not redistribute ChemDraw, Microsoft Office, Codex, DECIMER weights, or other proprietary components.
 
 - [ChemDraw](https://revvitysignals.com/products/research/chemdraw) is proprietary software licensed by Revvity Signals.
-- [cdxml-toolkit](https://github.com/kienerj/cdxmltoolkit) is an independent open-source dependency.
+- [cdxml-toolkit-community](https://github.com/ZiChenWang114514/cdxml-toolkit-community) is the maintained runtime used by this Skill and continues the upstream `cdxml-toolkit` project.
 - [DECIMER](https://github.com/Kohulan/DECIMER-Image_Classifier) components and model weights use their upstream terms.
 - Codex and Microsoft Office are optional external runtimes governed by their vendors.
 

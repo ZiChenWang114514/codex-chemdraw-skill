@@ -12,10 +12,8 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.types import LATEST_PROTOCOL_VERSION
 
-import mcp_compat
-
-
-SERVER = Path(__file__).with_name("mcp_server.py")
+from cdxml_toolkit.mcp_runtime import mcp_compat
+SERVER_MODULE = "cdxml_toolkit.mcp_runtime.mcp_server"
 
 
 def _input_schema(tool):
@@ -41,7 +39,7 @@ async def _list_tools():
     environment.update({"TF_CPP_MIN_LOG_LEVEL": "3", "TF_ENABLE_ONEDNN_OPTS": "0"})
     parameters = StdioServerParameters(
         command=sys.executable,
-        args=[str(SERVER)],
+        args=["-m", SERVER_MODULE],
         env=environment,
     )
     async with stdio_client(parameters) as (read_stream, write_stream):
@@ -63,7 +61,7 @@ class MCPStdioTests(unittest.TestCase):
             expected_protocol,
         )
         by_name = {tool.name: tool for tool in tools}
-        self.assertEqual(len(by_name), 34)
+        self.assertEqual(len(by_name), 35)
         self.assertIn("inspect_chemdraw_objects_in_office", by_name)
         self.assertIn("replace_chemdraw_objects_in_office", by_name)
         self.assertIn("resolve_name", by_name)

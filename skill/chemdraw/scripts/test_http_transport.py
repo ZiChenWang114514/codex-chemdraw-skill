@@ -6,10 +6,8 @@ import time
 import unittest
 from unittest import mock
 
-import mcp_server
-import telemetry
-
-
+from cdxml_toolkit.mcp_runtime import mcp_server
+from cdxml_toolkit.mcp_runtime import telemetry
 async def asgi_request(app, path: str, headers: list[tuple[bytes, bytes]] | None = None):
     sent = []
     received = False
@@ -50,6 +48,14 @@ class HttpTransportTests(unittest.TestCase):
     def test_stdio_remains_the_default_transport(self):
         args = mcp_server.parse_args([])
         self.assertEqual(args.transport, "stdio")
+
+    def test_http_interrupt_exits_without_a_traceback(self):
+        with mock.patch.object(
+            mcp_server, "run_streamable_http", side_effect=KeyboardInterrupt
+        ):
+            self.assertIsNone(
+                mcp_server.main(["--transport", "streamable-http"])
+            )
 
     def test_remote_bind_requires_api_key_and_explicit_allowed_host(self):
         with self.assertRaisesRegex(ValueError, "API key"):

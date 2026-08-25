@@ -15,7 +15,7 @@ INSTALLER = ROOT / "scripts" / "install.ps1"
 class InstallerTests(unittest.TestCase):
     def test_existing_skill_backup_is_outside_discovery_directory(self) -> None:
         shell = shutil.which("pwsh") or shutil.which("powershell")
-        self.assertIsNotNone(shell, "PowerShell is required for this Windows-first project")
+        self.assertIsNotNone(shell, "PowerShell is required to test the supplied installer")
         with tempfile.TemporaryDirectory() as tmp:
             codex_home = Path(tmp) / ".codex"
             destination = codex_home / "skills" / "chemdraw"

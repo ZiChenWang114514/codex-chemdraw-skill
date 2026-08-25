@@ -5,7 +5,7 @@ description: Use when Codex needs to install, configure, diagnose, or use ChemDr
 
 # ChemDraw
 
-Use the `cdxml-toolkit` MCP server for stable operations. Preserve source files, ground every structure, verify molecular semantics, and confirm final artifact compatibility through native ChemDraw rendering.
+Use the `cdxml-toolkit-community` hardened MCP runtime for stable operations. Preserve source files, ground every structure, verify molecular semantics, and confirm final artifact compatibility through native ChemDraw rendering.
 
 ## Core Rules
 
@@ -31,6 +31,10 @@ Load [workflow-router.md](references/workflow-router.md), then read only the wor
 For first-time installation or upgrade work, load [operations.md](references/operations.md) before changing files or MCP configuration. Run the read-only prerequisite checker, distinguish core, native ChemDraw, ChemScript, Office, and DECIMER requirements, and verify only the capabilities the user selected.
 
 For an exact callable signature, read [mcp-signatures.md](references/mcp-signatures.md). For selection, policy, and errors, read [toolkit-tools.md](references/toolkit-tools.md). Do not guess arguments from prose.
+
+Start diagnosis with `get_toolkit_capabilities()`. The default `codex` profile
+contains 35 tools; `core`, `office`, `analysis`, and `chemscript` profiles can
+reduce tool selection noise for focused work.
 
 ## Domain References
 

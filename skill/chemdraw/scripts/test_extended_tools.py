@@ -18,9 +18,7 @@ from cdxml_toolkit.office.ole_embedder import (
     build_pptx as build_fixture_pptx,
 )
 
-import extended_tools
-
-
+from cdxml_toolkit.mcp_runtime import extended_tools
 MINIMAL_CDXML = """<?xml version="1.0" encoding="UTF-8"?>
 <CDXML BondLength="14.40"><page id="1"><fragment id="2"/></page></CDXML>
 """

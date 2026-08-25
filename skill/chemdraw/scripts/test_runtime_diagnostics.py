@@ -8,9 +8,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-import runtime_diagnostics
-
-
+from cdxml_toolkit.mcp_runtime import runtime_diagnostics
 class RuntimeDiagnosticsTests(unittest.TestCase):
     def test_probe_stage_contains_secondary_timeout_during_teardown(self):
         process = mock.Mock()
@@ -139,13 +137,13 @@ class RuntimeDiagnosticsTests(unittest.TestCase):
         self.assertFalse(result["metadata"]["network_used"])
         self.assertEqual(
             result["outputs"]["capabilities"]["cdxml_toolkit"]["version"],
-            "0.5.17",
+            __import__("cdxml_toolkit").__version__,
         )
         self.assertEqual(
             result["outputs"]["capabilities"]["mcp_sdk"]["version"],
             importlib.metadata.version("mcp"),
         )
-        self.assertEqual(result["metadata"]["tool_count"], 34)
+        self.assertEqual(result["metadata"]["tool_count"], 35)
         self.assertEqual(
             result["outputs"]["capabilities"]["tool_registry"]["status"],
             "available",

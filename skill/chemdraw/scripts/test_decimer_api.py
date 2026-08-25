@@ -16,13 +16,15 @@ from urllib.error import HTTPError, URLError
 import warnings
 
 
-MODULE_PATH = Path(__file__).with_name("decimer_api.py")
-REMOTE_TOOLS_PATH = Path(__file__).with_name("remote_tools.py")
+from cdxml_toolkit.mcp_runtime import decimer_api as _decimer_api_module
+MODULE_PATH = Path(_decimer_api_module.__file__)
+from cdxml_toolkit.mcp_runtime import remote_tools as _remote_tools_module
+REMOTE_TOOLS_PATH = Path(_remote_tools_module.__file__)
 
 
 def load_client():
     if not MODULE_PATH.is_file():
-        raise AssertionError("decimer_api.py has not been implemented")
+        raise AssertionError("cdxml_toolkit.mcp_runtime.decimer_api.py has not been implemented")
     spec = importlib.util.spec_from_file_location("decimer_api", MODULE_PATH)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
@@ -31,10 +33,10 @@ def load_client():
 
 
 def load_remote_tools(client):
-    spec = importlib.util.spec_from_file_location("remote_tools_under_test", REMOTE_TOOLS_PATH)
+    spec = importlib.util.spec_from_file_location("cdxml_toolkit.mcp_runtime.remote_tools_under_test", REMOTE_TOOLS_PATH)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
-    with mock.patch.dict(sys.modules, {"decimer_api": client}):
+    with mock.patch.dict(sys.modules, {"cdxml_toolkit.mcp_runtime.decimer_api": client}):
         spec.loader.exec_module(module)
     return module
 

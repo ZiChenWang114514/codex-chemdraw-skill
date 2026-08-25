@@ -16,10 +16,8 @@ from cdxml_toolkit.office.ole_embedder import (
     build_pptx,
 )
 
-import extended_tools
-import office_objects
-
-
+from cdxml_toolkit.mcp_runtime import extended_tools
+from cdxml_toolkit.mcp_runtime import office_objects
 MINIMAL_CDXML = """<?xml version="1.0" encoding="UTF-8"?>
 <CDXML BondLength="14.40"><page id="1"><fragment id="2"/></page></CDXML>
 """
@@ -90,9 +88,9 @@ class OfficeInspectionTests(unittest.TestCase):
         output = self.root / f"inspection-{suffix[1:]}"
         _write_dual_office(source)
         with mock.patch(
-            "office_objects._convert_cdx_to_cdxml", return_value=MINIMAL_CDXML
+            "cdxml_toolkit.mcp_runtime.office_objects._convert_cdx_to_cdxml", return_value=MINIMAL_CDXML
         ), mock.patch(
-            "office_objects._render_cdxml_preview", side_effect=_render_png
+            "cdxml_toolkit.mcp_runtime.office_objects._render_cdxml_preview", side_effect=_render_png
         ):
             result = extended_tools.inspect_chemdraw_objects_in_office(
                 str(source), str(output), render_previews=render_previews
@@ -146,8 +144,8 @@ class OfficeInspectionTests(unittest.TestCase):
         output = self.root / "inspection"
         _write_dual_office(source)
         with mock.patch(
-            "office_objects._convert_cdx_to_cdxml", return_value=MINIMAL_CDXML
-        ), mock.patch("office_objects._render_cdxml_preview") as renderer:
+            "cdxml_toolkit.mcp_runtime.office_objects._convert_cdx_to_cdxml", return_value=MINIMAL_CDXML
+        ), mock.patch("cdxml_toolkit.mcp_runtime.office_objects._render_cdxml_preview") as renderer:
             result = extended_tools.inspect_chemdraw_objects_in_office(
                 str(source), str(output), render_previews=False
             )
@@ -162,7 +160,7 @@ class OfficeInspectionTests(unittest.TestCase):
         output = self.root / "inspection"
         _write_dual_office(source)
         with mock.patch(
-            "office_objects._convert_cdx_to_cdxml", side_effect=RuntimeError("convert")
+            "cdxml_toolkit.mcp_runtime.office_objects._convert_cdx_to_cdxml", side_effect=RuntimeError("convert")
         ):
             with self.assertRaisesRegex(RuntimeError, "convert"):
                 extended_tools.inspect_chemdraw_objects_in_office(
@@ -175,7 +173,7 @@ class OfficeInspectionTests(unittest.TestCase):
         output = self.root / "inspection"
         _write_many_office(source, 11)
         with mock.patch(
-            "office_objects._convert_cdx_to_cdxml", return_value=MINIMAL_CDXML
+            "cdxml_toolkit.mcp_runtime.office_objects._convert_cdx_to_cdxml", return_value=MINIMAL_CDXML
         ):
             extended_tools.inspect_chemdraw_objects_in_office(
                 str(source), str(output), render_previews=False
@@ -225,7 +223,7 @@ class OfficeInspectionTests(unittest.TestCase):
             with mock.patch("pythoncom.CoInitialize") as initialize, mock.patch(
                 "pythoncom.CoUninitialize"
             ) as uninitialize, mock.patch(
-                "office_objects.native_renderer.render_cdxml",
+                "cdxml_toolkit.mcp_runtime.office_objects.native_renderer.render_cdxml",
                 side_effect=lambda source, destination, *, dpi: render(
                     source, destination, png_dpi=dpi
                 ),
@@ -254,7 +252,7 @@ class OfficeReplacementTests(unittest.TestCase):
         inspection = self.root / f"inspection-{suffix[1:]}"
         _write_dual_office(source)
         with mock.patch(
-            "office_objects._convert_cdx_to_cdxml", return_value=MINIMAL_CDXML
+            "cdxml_toolkit.mcp_runtime.office_objects._convert_cdx_to_cdxml", return_value=MINIMAL_CDXML
         ):
             extended_tools.inspect_chemdraw_objects_in_office(
                 str(source), str(inspection), render_previews=False
@@ -419,7 +417,7 @@ class OfficeReplacementTests(unittest.TestCase):
         ), mock.patch.object(
             extended_tools, "_build_chemdraw_ole", return_value=self.replacement_ole
         ), mock.patch(
-            "office_objects.render_office_pdf", side_effect=fail_export
+            "cdxml_toolkit.mcp_runtime.office_objects.render_office_pdf", side_effect=fail_export
         ):
             with self.assertRaisesRegex(RuntimeError, "Office export failed"):
                 extended_tools.replace_chemdraw_objects_in_office(
@@ -455,7 +453,7 @@ class OfficeReplacementTests(unittest.TestCase):
         ), mock.patch.object(
             extended_tools, "_build_chemdraw_ole", return_value=self.replacement_ole
         ), mock.patch(
-            "office_objects.com_apartment", create=True
+            "cdxml_toolkit.mcp_runtime.office_objects.com_apartment", create=True
         ) as apartment:
             extended_tools.replace_chemdraw_objects_in_office(
                 str(source), str(path), str(output), render_pdf_preview=False

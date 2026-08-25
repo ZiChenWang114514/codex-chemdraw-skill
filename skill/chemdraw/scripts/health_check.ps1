@@ -204,6 +204,9 @@ function Add-CommandFailure {
 }
 
 function Get-DiscoveryBootstrap {
+    if ($Python -and (Test-Path -LiteralPath $Python -PathType Leaf)) {
+        return [pscustomobject]@{ Command = $Python; Arguments = @() }
+    }
     $launcher = Get-Command py.exe -ErrorAction SilentlyContinue
     if ($launcher) {
         return [pscustomobject]@{ Command = $launcher.Source; Arguments = @('-3') }
@@ -211,9 +214,6 @@ function Get-DiscoveryBootstrap {
     $interpreter = Get-Command python.exe -ErrorAction SilentlyContinue
     if ($interpreter) {
         return [pscustomobject]@{ Command = $interpreter.Source; Arguments = @() }
-    }
-    if ($Python -and (Test-Path -LiteralPath $Python -PathType Leaf)) {
-        return [pscustomobject]@{ Command = $Python; Arguments = @() }
     }
     return $null
 }

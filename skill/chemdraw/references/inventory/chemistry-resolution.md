@@ -1,6 +1,6 @@
 # Chemistry Resolution Public Symbols
 
-> Generated from cdxml-toolkit 0.5.17. Curated guidance: [../toolkit-chemistry-resolution-interfaces.md](../toolkit-chemistry-resolution-interfaces.md).
+> Generated from cdxml-toolkit 0.7.0a1. Curated guidance: [../toolkit-chemistry-resolution-interfaces.md](../toolkit-chemistry-resolution-interfaces.md).
 
 ## `naming.aligned_namer`
 
@@ -88,8 +88,9 @@
 
 ## `resolve.jre_manager`
 
-- **function**, line 177: `ensure_java_on_path(download: bool = True) -> bool` - Make sure ``java`` is discoverable by subprocess calls.
-- **function**, line 134: `get_java(download: bool = True) -> Optional[str]` - Return the path to a ``java`` executable.
+- **function**, line 191: `ensure_java_on_path(download: bool = True) -> bool` - Discover Java and expose its executable directory to subprocesses.
+- **function**, line 165: `get_java(download: bool = True) -> Optional[str]` - Return Java from the system, a verified installation, or an approved download.
+- **function**, line 81: `install_jre_archive(archive_path: str | os.PathLike[str], *, expected_sha256: str | None = None, source: str = 'local') -> Optional[str]` - Verify and install a JRE ZIP without modifying an existing installation.
 
 ## `resolve.reagent_db`
 

@@ -4,10 +4,8 @@ from pathlib import Path
 import tempfile
 import unittest
 
-import official_overrides
-import structure_fidelity
-
-
+from cdxml_toolkit.mcp_runtime import official_overrides
+from cdxml_toolkit.mcp_runtime import structure_fidelity
 class StructureFidelityTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

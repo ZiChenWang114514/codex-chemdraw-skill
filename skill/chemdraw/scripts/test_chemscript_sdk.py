@@ -6,10 +6,8 @@ import tempfile
 import unittest
 from unittest import mock
 
-import chemscript_sdk
-import chemscript_sdk_runtime
-
-
+from cdxml_toolkit.mcp_runtime import chemscript_sdk
+from cdxml_toolkit.mcp_runtime import chemscript_sdk_runtime
 class ChemScriptSdkTests(unittest.TestCase):
     def test_catalog_returns_complete_coverage_summary_without_importing_sdk(self):
         runtime_result = {

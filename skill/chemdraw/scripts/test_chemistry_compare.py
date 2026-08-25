@@ -4,9 +4,7 @@ import json
 import unittest
 from unittest import mock
 
-import chemistry_compare
-
-
+from cdxml_toolkit.mcp_runtime import chemistry_compare
 class FakeBridge:
     def __init__(self, infos: dict[str, dict]):
         self.infos = infos

@@ -3,9 +3,7 @@ from __future__ import annotations
 import sys
 import unittest
 
-import mcp_compat
-
-
+from cdxml_toolkit.mcp_runtime import mcp_compat
 class MCPCompatibilityTests(unittest.TestCase):
     def test_installed_sdk_major_is_supported(self):
         self.assertIn(mcp_compat.sdk_major(), mcp_compat.SUPPORTED_MCP_MAJORS)

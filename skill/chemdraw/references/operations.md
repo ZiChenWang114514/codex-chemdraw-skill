@@ -6,17 +6,28 @@ Load for installation, MCP startup, worker timeout, ChemDraw COM, ChemScript, DE
 
 ## Installation Prerequisites
 
-Run `scripts/check_prerequisites.ps1` before a first installation or upgrade. It is read-only: it does not launch ChemDraw, read chemistry files, install packages, or change configuration. Pass the intended MCP runtime with `-Python`; add `-Json` only when a structured support report is useful.
+Run `scripts/check_prerequisites.ps1` before a first installation or upgrade. It is read-only: it does not launch ChemDraw, read chemistry files, install packages, or change configuration. Pass the intended MCP runtime with `-Python` and select only the intended features with `-Capabilities`; add `-Json` when a structured support report is useful.
 
 Classify requirements by requested capability:
 
-- Portable CDXML work requires 64-bit Windows, PowerShell 5.1 or later, a 64-bit Python 3.10-3.13 runtime, `cdxml-toolkit`, MCP SDK, and a working `codex` command. Python 3.12, `cdxml-toolkit==0.5.17`, and `mcp==2.0.0` are tested.
+- Portable CDXML and RDKit work runs on Windows, macOS, and Linux with a 64-bit Python 3.10-3.13 runtime, `cdxml-toolkit-community`, MCP SDK, and a working `codex` command. Python 3.12, `cdxml-toolkit-community==0.7.0a1`, and MCP 1.x/2.x are tested. PowerShell is needed only for the supplied `.ps1` helpers.
 - Native rendering, CDX conversion, and ChemDraw cleanup additionally require licensed Windows desktop ChemDraw, .NET Framework 4.8 for current releases, working `ChemDraw.Application` COM registration, and manual activation confirmation.
 - Molecular comparison and ChemScript SDK execution additionally require managed and native ChemScript DLLs. Keep the main MCP Python 64-bit; use a separate helper Python when a legacy ChemScript DLL is 32-bit.
 - Editable DOCX/PPTX objects require the corresponding desktop Office application. Office is optional for other workflows.
 - Local OCSR requires DECIMER model weights. Remote OCSR remains an explicit upload decision and does not replace local prerequisites.
 
-In a repository checkout, preview `scripts/install.ps1 -Python <path> -ConfigureMcp` before adding `-Apply`. After installation and a Codex restart, select the appropriate verification:
+Examples:
+
+```powershell
+# Portable CDXML and RDKit only; this is the default selection.
+scripts/check_prerequisites.ps1 -Python <path> -Capabilities core
+
+# Licensed Windows workstation with every local native feature.
+scripts/check_prerequisites.ps1 -Python <path> `
+  -Capabilities core,native,chemscript,office,decimer
+```
+
+Install from a repository checkout with `python -m pip install -e ".[dev]"` for portable development, or select the documented extras needed by the requested workflow. Run `scripts/configure_mcp.ps1` to inspect the proposed Codex configuration; supply `-Apply` only after reviewing it. After installation and a Codex restart, select the appropriate verification:
 
 - `health_check.ps1 -SkipNativeChemDraw` for code, package, test, and MCP checks without native applications.
 - `health_check.ps1 -SkipOffice` for native ChemDraw PNG and ChemScript checks without Word or PowerPoint.
@@ -77,7 +88,7 @@ Read [decimer-api.md](decimer-api.md) for the HTTP contract.
 ## Failure Modes
 
 - MCP startup timeout: verify discovered Python and import `mcp_server.py` directly.
-- MCP SDK mismatch: use `mcp==2.0.0` for the tested runtime. The launcher also supports SDK 1.x and provides the renamed high-level server class expected by `cdxml-toolkit==0.5.17`.
+- MCP SDK mismatch: use a supported MCP 1.x or 2.x release. The community runtime supplies the compatibility alias required by its core service.
 - Tool timeout: raise the worker timeout only after confirming the operation is legitimately long-running.
 - Molecular analysis timeout: `modify_molecule` is limited to 90 seconds because ChemScript naming and decomposition can become expensive for complex fused structures. Trusted SMILES can be drawn directly when no modification is requested.
 - Native resource busy: ChemDraw COM operations share a named per-user mutex. Let the active render, conversion, or Office operation finish before retrying; ordinary parsing remains concurrent.

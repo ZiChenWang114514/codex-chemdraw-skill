@@ -2,6 +2,8 @@
 [CmdletBinding()]
 param(
     [string]$Python,
+    [ValidateSet('core', 'native', 'chemscript', 'office', 'decimer')]
+    [string[]]$Capabilities = @('core'),
     [switch]$Json,
     [switch]$SkipCodex,
     [switch]$SkipChemDraw,
@@ -14,6 +16,15 @@ $ErrorActionPreference = 'Stop'
 
 $checks = [Collections.Generic.List[object]]::new()
 $nextSteps = [Collections.Generic.List[string]]::new()
+$selectedCapabilities = @($Capabilities | ForEach-Object { $_.ToLowerInvariant() } | Select-Object -Unique)
+if ('core' -notin $selectedCapabilities) {
+    $selectedCapabilities = @('core') + $selectedCapabilities
+}
+$nativeRequested = 'native' -in $selectedCapabilities
+$chemScriptRequested = 'chemscript' -in $selectedCapabilities
+$officeRequested = 'office' -in $selectedCapabilities
+$decimerRequested = 'decimer' -in $selectedCapabilities
+$windowsNativeRequested = $nativeRequested -or $chemScriptRequested -or $officeRequested
 
 function Add-Check {
     param(
@@ -80,6 +91,23 @@ function Invoke-Captured {
     }
 }
 
+function Invoke-PythonCode {
+    param(
+        [Parameter(Mandatory)][string]$PythonPath,
+        [Parameter(Mandatory)][string]$Code
+    )
+
+    $scriptPath = Join-Path $env:TEMP ("chemdraw-prerequisite-{0}.py" -f [guid]::NewGuid().ToString('N'))
+    try {
+        [IO.File]::WriteAllText($scriptPath, $Code, [Text.UTF8Encoding]::new($false))
+        return Invoke-Captured -FilePath $PythonPath -Arguments @($scriptPath)
+    } finally {
+        if (Test-Path -LiteralPath $scriptPath) {
+            Remove-Item -LiteralPath $scriptPath -Force
+        }
+    }
+}
+
 function Get-RegistryDefaultValue {
     param([Parameter(Mandatory)][string]$LiteralPath)
 
@@ -106,14 +134,22 @@ $isSupportedWindows = $isWindowsHost -and `
     [Environment]::Is64BitOperatingSystem -and `
     [Environment]::OSVersion.Version.Major -ge 10
 if ($isSupportedWindows) {
-    Add-Check -Name 'windows' -Status 'pass' -Required $true `
+    Add-Check -Name 'windows' -Status 'pass' -Required $windowsNativeRequested `
         -Detail ("{0}; 64-bit OS" -f [Environment]::OSVersion.VersionString) `
-        -Help 'Use 64-bit Windows 10 or Windows 11.'
+        -Help 'Windows is optional for portable CDXML and RDKit work, and required for native ChemDraw, ChemScript, and Office automation.'
 } else {
-    Add-Check -Name 'windows' -Status 'fail' -Required $true `
-        -Detail 'This project requires 64-bit Windows 10 or Windows 11 for ChemDraw COM automation.' `
-        -Help 'Run the server on a Windows 10 or Windows 11 computer with desktop ChemDraw.'
-    Add-NextStep 'Move the installation to a supported 64-bit Windows computer.'
+    Add-Check -Name 'windows' `
+        -Status $(if ($windowsNativeRequested) { 'fail' } else { 'warning' }) `
+        -Required $windowsNativeRequested `
+        -Detail $(if ($windowsNativeRequested) {
+            'The selected native capability requires 64-bit Windows 10 or Windows 11.'
+        } else {
+            'A non-Windows host can run the selected portable CDXML and RDKit capabilities.'
+        }) `
+        -Help 'Use a licensed Windows ChemDraw host only for native rendering, ChemScript, or editable Office objects.'
+    if ($windowsNativeRequested) {
+        Add-NextStep 'Run native ChemDraw, ChemScript, and Office capabilities on a supported 64-bit Windows computer.'
+    }
 }
 
 $powerShellVersion = $PSVersionTable.PSVersion
@@ -179,7 +215,7 @@ if ($Python) {
 $pythonReady = $false
 if ($pythonPath) {
     $pythonCode = 'import json, platform, struct, sys; print(json.dumps({"version": list(sys.version_info[:3]), "executable": sys.executable, "bits": struct.calcsize("P") * 8, "implementation": platform.python_implementation()}))'
-    $pythonProbe = Invoke-Captured -FilePath $pythonPath -Arguments @('-c', $pythonCode)
+    $pythonProbe = Invoke-PythonCode -PythonPath $pythonPath -Code $pythonCode
     if ($pythonProbe.ExitCode -eq 0) {
         try {
             $pythonInfo = $pythonProbe.Output | ConvertFrom-Json
@@ -229,13 +265,15 @@ if ($SkipPythonPackages) {
 import importlib
 import importlib.metadata as metadata
 import json
+import sys
 
 modules = {
-    "cdxml_toolkit": "cdxml-toolkit",
+    "cdxml_toolkit": "cdxml-toolkit-community",
     "mcp": "mcp",
     "rdkit": "rdkit",
-    "win32com.client": "pywin32",
 }
+if sys.platform == "win32":
+    modules["win32com.client"] = "pywin32"
 result = {}
 for module_name, distribution_name in modules.items():
     try:
@@ -249,7 +287,7 @@ for module_name, distribution_name in modules.items():
         result[module_name] = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 print(json.dumps(result))
 '@
-    $packageProbe = Invoke-Captured -FilePath $pythonPath -Arguments @('-c', $packageCode)
+    $packageProbe = Invoke-PythonCode -PythonPath $pythonPath -Code $packageCode
     if ($packageProbe.ExitCode -eq 0) {
         try {
             $packageInfo = $packageProbe.Output | ConvertFrom-Json
@@ -264,17 +302,17 @@ print(json.dumps(result))
             }
             if ($missingPackages.Count -eq 0) {
                 $versionText = ($versions -join ', ')
-                $testedVersions = $versionText -match 'cdxml_toolkit=0\.5\.17' -and `
-                    $versionText -match 'mcp=2\.0\.0'
+                $testedVersions = $versionText -match 'cdxml_toolkit=0\.7\.0a1' -and `
+                    $versionText -match 'mcp=[12]\.'
                 Add-Check -Name 'python_packages' `
                     -Status $(if ($testedVersions) { 'pass' } else { 'warning' }) `
                     -Required $true `
                     -Detail $versionText `
-                    -Help 'The tested versions are cdxml-toolkit 0.5.17 and MCP 2.0.0; compatible MCP 1.x installations are also supported.'
+                    -Help 'The tested runtime is cdxml-toolkit-community 0.7.0a1 with MCP 1.x or 2.x.'
             } else {
                 Add-Check -Name 'python_packages' -Status 'fail' -Required $true `
                     -Detail ($missingPackages -join '; ') `
-                    -Help 'Install mcp==2.0.0 and cdxml-toolkit==0.5.17 into this exact Python environment.'
+                    -Help 'Install cdxml-toolkit-community 0.7.0a1 and MCP 1.x or 2.x into this exact Python environment.'
                 Add-NextStep 'Install the tested Python packages into the selected environment.'
             }
         } catch {
@@ -285,7 +323,7 @@ print(json.dumps(result))
     } else {
         Add-Check -Name 'python_packages' -Status 'fail' -Required $true `
             -Detail $packageProbe.Output `
-            -Help 'Install mcp==2.0.0 and cdxml-toolkit==0.5.17 into this exact Python environment.'
+            -Help 'Install cdxml-toolkit-community 0.7.0a1 and MCP 1.x or 2.x into this exact Python environment.'
         Add-NextStep 'Install the tested Python packages into the selected environment.'
     }
 
@@ -303,6 +341,44 @@ print(json.dumps(result))
         -Detail 'Package checks require a supported Python runtime.'
     Add-Check -Name 'pip_dependencies' -Status 'skipped' -Required $true `
         -Detail 'pip dependency checks require a supported Python runtime.'
+}
+
+if ($decimerRequested -and $pythonReady) {
+    $decimerCode = @'
+import json
+from cdxml_toolkit.mcp_runtime.runtime_diagnostics import diagnose_runtime
+
+print(json.dumps(diagnose_runtime()["capabilities"]["decimer_models"]))
+'@
+    $decimerProbe = Invoke-PythonCode -PythonPath $pythonPath -Code $decimerCode
+    if ($decimerProbe.ExitCode -eq 0) {
+        try {
+            $decimerInfo = $decimerProbe.Output | ConvertFrom-Json
+            $decimerReady = $decimerInfo.status -eq 'available'
+            Add-Check -Name 'decimer_models' `
+                -Status $(if ($decimerReady) { 'pass' } else { 'fail' }) `
+                -Required $true `
+                -Detail $(if ($decimerReady) { "DECIMER model markers are complete under $($decimerInfo.root)." } else { "DECIMER model markers are incomplete under $($decimerInfo.root)." }) `
+                -Help 'Install the official standard and hand-drawn model weights with scripts\install_decimer_models.py.'
+            if (-not $decimerReady) {
+                Add-NextStep 'Install and verify the DECIMER model weights, then repeat this capability check.'
+            }
+        } catch {
+            Add-Check -Name 'decimer_models' -Status 'fail' -Required $true `
+                -Detail "The DECIMER probe returned invalid JSON: $($_.Exception.Message)" `
+                -Help 'Verify the selected Python environment and reinstall the DECIMER optional dependencies.'
+        }
+    } else {
+        Add-Check -Name 'decimer_models' -Status 'fail' -Required $true `
+            -Detail $decimerProbe.Output `
+            -Help 'Install the DECIMER optional dependencies and official model weights.'
+    }
+} elseif ($decimerRequested) {
+    Add-Check -Name 'decimer_models' -Status 'skipped' -Required $true `
+        -Detail 'DECIMER model checks require a supported Python runtime.'
+} else {
+    Add-Check -Name 'decimer_models' -Status 'skipped' -Required $false `
+        -Detail 'Local DECIMER recognition is not among the selected capabilities.'
 }
 
 if ($SkipCodex) {
@@ -326,15 +402,15 @@ if ($SkipCodex) {
 }
 
 $chemdrawExe = $null
-if ($SkipChemDraw) {
+if ($SkipChemDraw -or -not $windowsNativeRequested) {
     Add-Check -Name 'dotnet_framework' -Status 'skipped' -Required $false `
-        -Detail '.NET and ChemDraw checks were skipped by request.'
+        -Detail $(if ($SkipChemDraw) { '.NET and ChemDraw checks were skipped by request.' } else { '.NET is not needed for the selected portable capabilities.' })
     Add-Check -Name 'chemdraw_com' -Status 'skipped' -Required $false `
-        -Detail 'ChemDraw COM discovery was skipped by request.'
+        -Detail $(if ($SkipChemDraw) { 'ChemDraw COM discovery was skipped by request.' } else { 'ChemDraw COM is not needed for the selected portable capabilities.' })
     Add-Check -Name 'chemdraw_activation' -Status 'skipped' -Required $false `
-        -Detail 'ChemDraw activation must be checked manually on a native workstation.'
+        -Detail $(if ($SkipChemDraw) { 'ChemDraw activation must be checked manually on a native workstation.' } else { 'ChemDraw activation is not needed for the selected portable capabilities.' })
     Add-Check -Name 'chemscript_files' -Status 'skipped' -Required $false `
-        -Detail 'ChemScript file discovery was skipped by request.'
+        -Detail $(if ($SkipChemDraw) { 'ChemScript file discovery was skipped by request.' } else { 'ChemScript is not among the selected capabilities.' })
 } else {
     $dotNetRelease = $null
     try {
@@ -347,7 +423,7 @@ if ($SkipChemDraw) {
     $dotNetReady = $dotNetRelease -and [int]$dotNetRelease -ge 528040
     Add-Check -Name 'dotnet_framework' `
         -Status $(if ($dotNetReady) { 'pass' } else { 'fail' }) `
-        -Required $true `
+        -Required $windowsNativeRequested `
         -Detail $(if ($dotNetRelease) { ".NET Framework 4.8-compatible release $dotNetRelease" } else { '.NET Framework 4.8 was not detected.' }) `
         -Help 'ChemDraw 22.0 and later require .NET Framework 4.8 on Windows.'
     if (-not $dotNetReady) {
@@ -396,17 +472,21 @@ if ($SkipChemDraw) {
         $managedDll = $chemScriptDlls | Select-Object -First 1
         $nativeDll = $chemScriptDlls | Select-Object -Last 1
         if ($managedDll -and $nativeDll) {
-            Add-Check -Name 'chemscript_files' -Status 'pass' -Required $false `
+            Add-Check -Name 'chemscript_files' -Status 'pass' -Required $chemScriptRequested `
                 -Detail "Managed: $($managedDll.Name); native: $($nativeDll.Name)" `
                 -Help 'Run cdxml-doctor --no-tests after Python package installation to configure the bridge.'
         } else {
-            Add-Check -Name 'chemscript_files' -Status 'warning' -Required $false `
+            Add-Check -Name 'chemscript_files' `
+                -Status $(if ($chemScriptRequested) { 'fail' } else { 'warning' }) `
+                -Required $chemScriptRequested `
                 -Detail 'A complete managed/native ChemScript DLL pair was not found near ChemDraw.exe.' `
                 -Help 'Core CDXML tools can still work. Molecule comparison and full SDK tools require ChemScript.'
             Add-NextStep 'Run cdxml-doctor --no-tests to discover or configure ChemScript if those tools are needed.'
         }
     } else {
-        Add-Check -Name 'chemscript_files' -Status 'warning' -Required $false `
+        Add-Check -Name 'chemscript_files' `
+            -Status $(if ($chemScriptRequested) { 'fail' } else { 'warning' }) `
+            -Required $chemScriptRequested `
             -Detail 'ChemScript files could not be checked before ChemDraw COM discovery succeeds.' `
             -Help 'Molecule comparison and full SDK tools require a configured ChemScript installation.'
     }
@@ -418,7 +498,7 @@ if ($isWindowsHost) {
     $powerPointRegistered = [bool](Get-RegistryDefaultValue `
         'Registry::HKEY_CLASSES_ROOT\PowerPoint.Application\CLSID')
     if ($wordRegistered -and $powerPointRegistered) {
-        Add-Check -Name 'office_desktop' -Status 'pass' -Required $false `
+        Add-Check -Name 'office_desktop' -Status 'pass' -Required $officeRequested `
             -Detail 'Microsoft Word and PowerPoint desktop COM registrations are present.' `
             -Help 'Office is needed only for editable DOCX/PPTX ChemDraw object workflows.'
     } else {
@@ -430,13 +510,17 @@ if ($isWindowsHost) {
         } else {
             'Word and PowerPoint desktop COM registrations were not found.'
         }
-        Add-Check -Name 'office_desktop' -Status 'warning' -Required $false `
+        Add-Check -Name 'office_desktop' `
+            -Status $(if ($officeRequested) { 'fail' } else { 'warning' }) `
+            -Required $officeRequested `
             -Detail $detail `
             -Help 'Install the required desktop Office application only if you need editable Office objects.'
     }
 } else {
-    Add-Check -Name 'office_desktop' -Status 'skipped' -Required $false `
-        -Detail 'Office COM is available only on the supported Windows host.'
+    Add-Check -Name 'office_desktop' `
+        -Status $(if ($officeRequested) { 'fail' } else { 'skipped' }) `
+        -Required $officeRequested `
+        -Detail 'Office COM is available only on a supported Windows host.'
 }
 
 try {
@@ -466,12 +550,13 @@ $requiredSkipped = @($checks | Where-Object {
 })
 $ok = $blockingChecks.Count -eq 0 -and $requiredSkipped.Count -eq 0
 if ($ok) {
-    Add-NextStep 'Preview installation with scripts\install.ps1, then add -Apply -ConfigureMcp when the paths are correct.'
+    Add-NextStep 'Install the selected package extras, inspect scripts\configure_mcp.ps1 output, then supply -Apply when the proposed Codex configuration is correct.'
 }
 
 $report = [pscustomobject][ordered]@{
     schema_version = 1
     ok = $ok
+    selected_capabilities = @($selectedCapabilities)
     summary = [pscustomobject][ordered]@{
         passed = @($checks | Where-Object { $_.status -eq 'pass' }).Count
         warnings = @($checks | Where-Object { $_.status -eq 'warning' }).Count
@@ -486,6 +571,7 @@ if ($Json) {
     $report | ConvertTo-Json -Depth 6
 } else {
     Write-Output 'ChemDraw Skill prerequisite check'
+    Write-Output ("Selected capabilities: {0}" -f ($selectedCapabilities -join ', '))
     Write-Output ''
     foreach ($check in $checks) {
         $marker = switch ($check.status) {

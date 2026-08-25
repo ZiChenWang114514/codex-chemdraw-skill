@@ -1,6 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$Python,
+    [ValidateSet('core', 'native', 'chemscript', 'office', 'decimer')]
+    [string[]]$Capabilities = @('core'),
     [switch]$Json,
     [switch]$SkipCodex,
     [switch]$SkipChemDraw,

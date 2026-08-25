@@ -37,7 +37,7 @@ body:
     id: environment
     attributes:
       label: Environment
-      description: Windows, Codex CLI, Python, cdxml-toolkit, ChemDraw, and Office versions/bitness.
+      description: Operating system, Codex CLI, Python, cdxml-toolkit-community, ChemDraw, and Office versions/bitness.
     validations:
       required: true
   - type: checkboxes

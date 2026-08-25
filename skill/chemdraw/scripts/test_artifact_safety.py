@@ -7,10 +7,9 @@ import types
 import unittest
 from unittest import mock
 
-import artifact_safety
-import official_overrides
-
-
+from cdxml_toolkit.office import ole_extractor
+from cdxml_toolkit.mcp_runtime import artifact_safety
+from cdxml_toolkit.mcp_runtime import official_overrides
 MINIMAL_CDXML = "<CDXML><page id=\"1\"/></CDXML>\n"
 
 
@@ -70,7 +69,7 @@ class ArtifactSafetyTests(unittest.TestCase):
             Path(target).write_text("competitor", encoding="utf-8")
             raise FileExistsError(target)
 
-        with mock.patch("artifact_safety.os.link", side_effect=competing_link):
+        with mock.patch("cdxml_toolkit.mcp_runtime.artifact_safety.os.link", side_effect=competing_link):
             with self.assertRaisesRegex(ValueError, "overwrite"):
                 artifact_safety.publish_file(staged, destination)
 
@@ -92,7 +91,7 @@ class ArtifactSafetyTests(unittest.TestCase):
                 raise ValueError("Refusing to overwrite an existing file")
             return real_publish(source, destination)
 
-        with mock.patch("artifact_safety.publish_file", side_effect=publish):
+        with mock.patch("cdxml_toolkit.mcp_runtime.artifact_safety.publish_file", side_effect=publish):
             with self.assertRaisesRegex(ValueError, "overwrite"):
                 artifact_safety.publish_files(
                     [(first_stage, first), (second_stage, second)]
@@ -195,7 +194,7 @@ class OfficialArtifactAdapterTests(unittest.TestCase):
         with mock.patch(
             "cdxml_toolkit.mcp_server.server.draw_molecule", side_effect=draw
         ), mock.patch(
-            "structure_fidelity.repair_and_validate_drawn_cdxml",
+            "cdxml_toolkit.mcp_runtime.structure_fidelity.repair_and_validate_drawn_cdxml",
             return_value={"status": "preserved"},
         ):
             result = official_overrides.draw_molecule(
@@ -221,7 +220,7 @@ class OfficialArtifactAdapterTests(unittest.TestCase):
         with mock.patch(
             "cdxml_toolkit.mcp_server.server.draw_molecule", side_effect=draw
         ), mock.patch(
-            "structure_fidelity.repair_and_validate_drawn_cdxml",
+            "cdxml_toolkit.mcp_runtime.structure_fidelity.repair_and_validate_drawn_cdxml",
             return_value={"status": "preserved"},
         ):
             result = official_overrides.draw_molecule(
@@ -245,7 +244,7 @@ class OfficialArtifactAdapterTests(unittest.TestCase):
         with mock.patch(
             "cdxml_toolkit.mcp_server.server.draw_molecule", new=decorated
         ), mock.patch(
-            "structure_fidelity.repair_and_validate_drawn_cdxml",
+            "cdxml_toolkit.mcp_runtime.structure_fidelity.repair_and_validate_drawn_cdxml",
             return_value={"status": "preserved"},
         ):
             result = official_overrides.draw_molecule(
@@ -280,10 +279,7 @@ class OfficialArtifactAdapterTests(unittest.TestCase):
                 ),
             ]
 
-        with mock.patch(
-            "cdxml_toolkit.office.ole_extractor.extract_from_office",
-            side_effect=extract,
-        ):
+        with mock.patch.object(ole_extractor, "extract_from_office", side_effect=extract):
             result = official_overrides.extract_cdxml_from_office(
                 str(office), output_dir=str(destination)
             )

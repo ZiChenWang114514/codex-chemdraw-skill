@@ -57,7 +57,7 @@ Load one section matching the user's intent. Exact signatures live only in [mcp-
 
 ## Install Or Upgrade
 
-Read [operations.md](operations.md). Run `scripts/check_prerequisites.ps1` before changing the Skill or MCP configuration. Identify the requested capability set: portable CDXML, native ChemDraw, ChemScript, Office, local DECIMER, or remote HTTP. Keep the main Python 64-bit; configure any legacy 32-bit ChemScript helper separately. Preview the repository installer without `-Apply`, then apply only when installation was requested. Restart Codex and run the matching health-check mode.
+Read [operations.md](operations.md). Run `scripts/check_prerequisites.ps1` with the requested `-Capabilities` before changing the Skill or MCP configuration. Identify the requested feature set: portable CDXML, native ChemDraw, ChemScript, Office, local DECIMER, or remote HTTP. Keep the main Python 64-bit; configure any legacy 32-bit ChemScript helper separately. Inspect `scripts/configure_mcp.ps1` output before supplying `-Apply`, and change configuration only when installation was requested. Restart Codex and run the matching health-check mode.
 
 ## Diagnose Runtime
 
